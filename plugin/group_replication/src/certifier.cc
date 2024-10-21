@@ -284,6 +284,11 @@ Certifier::Certifier()
   mysql_mutex_init(key_GR_LOCK_certification_info, &LOCK_certification_info,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_GR_LOCK_cert_members, &LOCK_members, MY_MUTEX_INIT_FAST);
+
+  for (int i = 0; i < REPLAY_CAL_ARRAY; i++) {
+    replay_cal_hash_item *hash_item = &(replayed_cal_array[i]);
+    hash_item->number = 0;
+  }
 }
 
 Certifier::~Certifier() {

@@ -41,7 +41,8 @@ Certification_handler::Certification_handler()
       applier_module_thd(nullptr),
       group_sidno(0),
       transaction_context_packet(nullptr),
-      transaction_context_pevent(nullptr) {}
+      transaction_context_pevent(nullptr),
+      m_view_change_event_on_wait(false) {}
 
 Certification_handler::~Certification_handler() {
   delete transaction_context_pevent;
