@@ -26,12 +26,10 @@
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_psi.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_utils.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/app_data.h"
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/leader_info_data.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/synode_no.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/xcom_cfg.h"
 
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/network/include/network_management_interface.h"
-#include "xdr_gen/xcom_vp.h"
 
 /*
   Time is defined in seconds.
@@ -126,60 +124,6 @@ bool Gcs_xcom_proxy_impl::xcom_client_set_event_horizon(
   return successful;
 }
 
-bool Gcs_xcom_proxy_impl::xcom_client_set_leaders(
-    uint32_t gid, u_int nr_preferred_leaders, char const *preferred_leaders[],
-    node_no max_nr_leaders) {
-  app_data_ptr data = new_app_data();
-  init_set_leaders(gid, data, nr_preferred_leaders, preferred_leaders,
-                   new_app_data(), max_nr_leaders);
-  /* Takes ownership of data. */
-  Gcs_xcom_input_queue::future_reply future =
-      xcom_input_try_push_and_get_reply(data);
-  std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
-  bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
-
-  bool successful = false;
-  if (processable_reply) {
-    successful = (reply->get_payload()->cli_err == REQUEST_OK);
-  }
-
-  if (!successful) {
-    MYSQL_GCS_LOG_DEBUG("%s: Failed to push into XCom.", __func__);
-  }
-
-  return successful;
-}
-
-bool Gcs_xcom_proxy_impl::xcom_client_get_leaders(uint32_t gid,
-                                                  leader_info_data &leaders) {
-  bool successful = false;
-  app_data_ptr data = new_app_data();
-  data = init_get_leaders_msg(data, gid);
-  /* Takes ownership of data. */
-  Gcs_xcom_input_queue::future_reply future =
-      xcom_input_try_push_and_get_reply(data);
-  std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
-  bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
-  if (processable_reply) {
-    bool const reply_ok = (reply->get_payload()->cli_err == REQUEST_OK);
-    if (reply_ok) {
-      leaders = steal_leader_info_data(
-          reply->get_payload()->rd->reply_data_u.leaders);
-      successful = true;
-    } else {
-      MYSQL_GCS_LOG_DEBUG(
-          "xcom_client_get_leaders: Couldn't fetch the leader info. "
-          "(cli_err=%d)",
-          reply->get_payload()->cli_err);
-    }
-  } else {
-    MYSQL_GCS_LOG_DEBUG("xcom_client_get_leaders: Failed to push into XCom.");
-  }
-  return successful;
-}
-
 bool Gcs_xcom_proxy_impl::xcom_client_get_synode_app_data(
     connection_descriptor *fd, uint32_t gid, synode_no_array &synodes,
     synode_app_data_array &reply) {
@@ -201,6 +145,25 @@ bool Gcs_xcom_proxy_impl::xcom_client_set_cache_size(uint64_t size) {
   }
   return successful;
 }
+
+bool Gcs_xcom_proxy_impl::xcom_client_notify_truly_remove(const char *address) {
+  if (strlen(address) < MAX_IP_PORT_LEN) {
+    app_data_ptr data = new_app_data();
+    data = init_set_notify_truly_remove_msg(data, address);
+    /* Takes ownership of data. */
+    bool const successful = xcom_input_try_push(data);
+    if (!successful) {
+      MYSQL_GCS_LOG_DEBUG(
+          "xcom_client_notify_truly_remove: Failed to push into XCom.");
+    }
+    return successful;
+  } else {
+    MYSQL_GCS_LOG_INFO(
+        "in xcom_client_notify_truly_remove, address is too long.");
+    return false;
+  }
+}
+
 
 bool Gcs_xcom_proxy_impl::xcom_client_boot(node_list *nl, uint32_t gid) {
   app_data_ptr data = new_app_data();
@@ -322,47 +285,6 @@ void Gcs_xcom_proxy_impl::xcom_set_ssl_parameters(ssl_parameters ssl,
   m_tls_ciphersuites = tls.tls_ciphersuites;
 }
 
-/* purecov: begin deadcode */
-Gcs_xcom_proxy_impl::Gcs_xcom_proxy_impl()
-    : m_wait_time(WAITING_TIME),
-      m_lock_xcom_ready(),
-      m_cond_xcom_ready(),
-      m_is_xcom_ready(false),
-      m_lock_xcom_comms_status(),
-      m_cond_xcom_comms_status(),
-      m_xcom_comms_status(XCOM_COMM_STATUS_UNDEFINED),
-      m_lock_xcom_exit(),
-      m_cond_xcom_exit(),
-      m_is_xcom_exit(false),
-      m_socket_util(nullptr),
-      m_ssl_mode(SSL_DISABLED),
-      m_server_key_file(nullptr),
-      m_server_cert_file(nullptr),
-      m_client_key_file(nullptr),
-      m_client_cert_file(nullptr),
-      m_ca_file(nullptr),
-      m_ca_path(nullptr),
-      m_crl_file(nullptr),
-      m_crl_path(nullptr),
-      m_cipher(nullptr),
-      m_tls_version(nullptr),
-      m_tls_ciphersuites(nullptr),
-      m_should_exit(false) {
-  m_lock_xcom_ready.init(key_GCS_MUTEX_Gcs_xcom_proxy_impl_m_lock_xcom_ready,
-                         nullptr);
-  m_cond_xcom_ready.init(key_GCS_COND_Gcs_xcom_proxy_impl_m_cond_xcom_ready);
-  m_lock_xcom_comms_status.init(
-      key_GCS_MUTEX_Gcs_xcom_proxy_impl_m_lock_xcom_comms_status, nullptr);
-  m_cond_xcom_comms_status.init(
-      key_GCS_COND_Gcs_xcom_proxy_impl_m_cond_xcom_comms_status);
-  m_lock_xcom_exit.init(key_GCS_MUTEX_Gcs_xcom_proxy_impl_m_lock_xcom_exit,
-                        nullptr);
-  m_cond_xcom_exit.init(key_GCS_COND_Gcs_xcom_proxy_impl_m_cond_xcom_exit);
-
-  m_socket_util = new My_xp_socket_util_impl();
-}
-/* purecov: begin end */
-
 Gcs_xcom_proxy_impl::Gcs_xcom_proxy_impl(unsigned int wt)
     : m_wait_time(wt),
       m_lock_xcom_ready(),
@@ -419,7 +341,7 @@ site_def const *Gcs_xcom_proxy_impl::find_site_def(synode_no synode) {
 }
 
 node_address *Gcs_xcom_proxy_impl::new_node_address_uuid(unsigned int n,
-                                                         char const *names[],
+                                                         char *names[],
                                                          blob uuids[]) {
   return ::new_node_address_uuid(n, names, uuids);
 }
@@ -727,25 +649,6 @@ bool Gcs_xcom_proxy_base::xcom_set_event_horizon(
   return xcom_client_set_event_horizon(group_id_hash, event_horizon);
 }
 
-bool Gcs_xcom_proxy_base::xcom_set_leaders(uint32_t group_id_hash,
-                                           u_int nr_preferred_leaders,
-                                           char const *preferred_leaders[],
-                                           node_no max_nr_leaders) {
-  MYSQL_GCS_LOG_DEBUG(
-      "Reconfiguring XCom's preferred leaders to nr_preferred_leaders=%" PRIu32
-      " preferred_leaders[0]=%s max_nr_leaders=%" PRIu32,
-      nr_preferred_leaders,
-      nr_preferred_leaders > 0 ? preferred_leaders[0] : "n/a", max_nr_leaders);
-  return xcom_client_set_leaders(group_id_hash, nr_preferred_leaders,
-                                 preferred_leaders, max_nr_leaders);
-}
-
-bool Gcs_xcom_proxy_base::xcom_get_leaders(uint32_t group_id_hash,
-                                           leader_info_data &leaders) {
-  MYSQL_GCS_LOG_DEBUG("Retrieving leader information");
-  return xcom_client_get_leaders(group_id_hash, leaders);
-}
-
 static bool convert_synode_set_to_synode_array(
     synode_no_array &to,
     std::unordered_set<Gcs_xcom_synode> const &synode_set) {
@@ -808,6 +711,10 @@ bool Gcs_xcom_proxy_base::xcom_set_cache_size(uint64_t size) {
   return xcom_client_set_cache_size(size);
 }
 
+bool Gcs_xcom_proxy_base::notify_xcom_truly_remove(const char *address) {
+  return xcom_client_notify_truly_remove(address);
+}
+
 bool Gcs_xcom_proxy_base::xcom_force_nodes(Gcs_xcom_nodes &nodes,
                                            uint32_t group_id_hash) {
   node_list nl{0, nullptr};
@@ -826,7 +733,7 @@ bool Gcs_xcom_proxy_base::xcom_force_nodes(Gcs_xcom_nodes &nodes,
 bool Gcs_xcom_proxy_base::serialize_nodes_information(Gcs_xcom_nodes &nodes,
                                                       node_list &nl) {
   unsigned int len = 0;
-  char const **addrs = nullptr;
+  char **addrs = nullptr;
   blob *uuids = nullptr;
   nl = {0, nullptr};
 

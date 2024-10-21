@@ -66,10 +66,6 @@ struct plugin_local_variables {
   int write_set_extraction_algorithm;
   enum_wait_on_start_process_result wait_on_start_process;
   bool recovery_timeout_issue_on_stop;
-  // The first argument indicates whether or not to use the value stored in this
-  // pair's second argument for the group_replication_paxos_single_leader sysvar
-  // or the actual value that's stored on the sysvar
-  std::pair<bool, bool> allow_single_leader_latch{false, true};
 
   // (60min / 5min) * 24 * 7, i.e. a week.
   const uint MAX_AUTOREJOIN_TRIES = 2016;
@@ -108,7 +104,6 @@ struct plugin_local_variables {
     wait_on_engine_initialization = false;
     write_set_extraction_algorithm = HASH_ALGORITHM_OFF;
     wait_on_start_process = WAIT_ON_START_PROCESS_SUCCESS;
-    allow_single_leader_latch.first = false;
     recovery_timeout_issue_on_stop = false;
     // the default is 5 minutes (300 secs).
     rejoin_timeout = 300ULL;
@@ -164,6 +159,7 @@ struct plugin_options_variables {
 
   ulong recovery_retry_count_var;
   ulong recovery_reconnect_interval_var;
+  ulonglong donor_threshold_var;
   bool recovery_use_ssl_var;
   char *recovery_ssl_ca_var;
   char *recovery_ssl_capath_var;
@@ -220,7 +216,7 @@ struct plugin_options_variables {
   char *ip_whitelist_var;
   char *ip_allowlist_var;
 
-#define DEFAULT_COMMUNICATION_MAX_MESSAGE_SIZE 10485760
+#define DEFAULT_COMMUNICATION_MAX_MESSAGE_SIZE 1048576
 #define MAX_COMMUNICATION_MAX_MESSAGE_SIZE get_max_replica_max_allowed_packet()
 #define MIN_COMMUNICATION_MAX_MESSAGE_SIZE 0
   ulong communication_max_message_size_var;
@@ -230,19 +226,13 @@ struct plugin_options_variables {
 #define MAX_MESSAGE_CACHE_SIZE ULONG_MAX
   ulong message_cache_size_var;
 
-  bool single_primary_mode_var;
-  bool enforce_update_everywhere_checks_var;
+  uint xcom_cache_mode_var;
 
-  const char *flow_control_mode_values[3] = {"DISABLED", "QUOTA",
-                                             (const char *)nullptr};
-  TYPELIB flow_control_mode_typelib_t = {2, "flow_control_mode_typelib_t",
-                                         flow_control_mode_values, nullptr};
-  ulong flow_control_mode_var;
-#define DEFAULT_FLOW_CONTROL_THRESHOLD 25000
-#define MAX_FLOW_CONTROL_THRESHOLD INT_MAX32
-#define MIN_FLOW_CONTROL_THRESHOLD 0
-  long flow_control_certifier_threshold_var;
-  long flow_control_applier_threshold_var;
+  const char *single_primary_election_mode_values[4] = {
+    "WEIGHT_ONLY", "GTID_FIRST", "WEIGHT_FIRST", (const char *)nullptr};
+  TYPELIB single_primary_election_mode_typelib_t = {
+    3, "primary_election_mode_typelib_t", single_primary_election_mode_values,
+    nullptr};
 
 #define DEFAULT_TRANSACTION_SIZE_LIMIT 150000000
 #define MAX_TRANSACTION_SIZE_LIMIT 2147483647
@@ -268,13 +258,9 @@ struct plugin_options_variables {
 #define MIN_MEMBER_WEIGHT 0
   uint member_weight_var;
 
-  long flow_control_min_quota_var;
-  long flow_control_min_recovery_quota_var;
-  long flow_control_max_quota_var;
-  int flow_control_member_quota_percent_var;
-  int flow_control_period_var;
-  int flow_control_hold_percent_var;
-  int flow_control_release_percent_var;
+  uint applier_batch_size_threshold_var;
+
+  ulong single_primary_election_mode_var;
 
   ulonglong clone_threshold_var;
 
@@ -294,8 +280,6 @@ struct plugin_options_variables {
       2, "communication_stack_typelib_t", communication_stack_source_values,
       nullptr};
   ulong communication_stack_var;
-
-  bool allow_single_leader_var{false};
 };
 
 #endif /* PLUGIN_VARIABLES_INCLUDE */

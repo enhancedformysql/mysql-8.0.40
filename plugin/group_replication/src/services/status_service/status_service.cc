@@ -45,7 +45,7 @@ bool is_group_in_single_primary_mode_internal() {
     return false;
   }
 
-  return local_member_info->in_primary_mode();
+  return true;
 }
 
 /*

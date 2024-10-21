@@ -42,8 +42,7 @@ void Plugin_group_replication_auto_increment::reset_auto_increment_variables(
     group_replication_auto_increment_increment and
     group_replication_auto_increment_offset
   */
-  if ((force_reset || (local_member_info != nullptr &&
-                       !local_member_info->in_primary_mode())) &&
+  if (force_reset &&
       group_replication_auto_increment == current_server_increment &&
       group_replication_auto_offset == current_server_offset) {
     /* set to default values i.e. 1 */
@@ -60,25 +59,4 @@ void Plugin_group_replication_auto_increment::reset_auto_increment_variables(
 
 void Plugin_group_replication_auto_increment::set_auto_increment_variables(
     ulong increment, ulong offset) {
-  /* get server auto_increment variables value */
-  ulong current_server_increment = get_auto_increment_increment();
-  ulong current_server_offset = get_auto_increment_offset();
-
-  if (local_member_info != nullptr && !local_member_info->in_primary_mode() &&
-      current_server_increment == 1 && current_server_offset == 1) {
-    /* set server auto_increment variables */
-    set_auto_increment_increment(increment);
-    set_auto_increment_offset(offset);
-
-    /*
-      store auto_increment variables in local variables to verify later
-      in destructor if auto_increment variables were modified by user.
-    */
-    group_replication_auto_increment = increment;
-    group_replication_auto_offset = offset;
-
-    LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_AUTO_INC_SET, increment);
-
-    LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_AUTO_INC_OFFSET_SET, offset);
-  }
 }

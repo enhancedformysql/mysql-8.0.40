@@ -70,21 +70,6 @@ class Gcs_message_data {
   virtual ~Gcs_message_data();
 
   /**
-    Appends data to the header of the message. The data MUST have been
-    previously encoded in little endian format.
-
-    If the data to be appended exceeds the pre-allocated buffer capacity
-    an error is returned.
-
-    @param[in] to_append the data to append
-    @param[in] to_append_len the length of the data to append
-
-    @return true on error, false otherwise.
-  */
-
-  bool append_to_header(const uchar *to_append, uint32_t to_append_len);
-
-  /**
     Appends data to the payload of the message. The data MUST have been
     previously encoded in little endian format.
 
@@ -98,17 +83,6 @@ class Gcs_message_data {
   */
 
   bool append_to_payload(const uchar *to_append, uint64_t to_append_len);
-
-  /**
-   Release the buffer's ownership which means that this object will not
-   be responsible for deallocating its internal buffer. The caller should
-   do so.
-
-   This method should be used along with the following method:
-   encode(**buffer, *buffer_len).
-  **/
-
-  void release_ownership();
 
   /**
    Encodes the header and payload into an internal buffer. If NULL pointer
@@ -392,12 +366,6 @@ class Gcs_message {
   */
 
   const Gcs_member_identifier &get_origin() const;
-
-  /**
-    @return the destination of this message. It might be NULL.
-  */
-
-  const Gcs_group_identifier *get_destination() const;
 
   /**
     @return the message data to be filled.

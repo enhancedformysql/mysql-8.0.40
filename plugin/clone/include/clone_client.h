@@ -516,7 +516,6 @@ class Client {
       try {
         info.m_thread = std::thread(func, m_share, m_num_active_workers);
       } catch (...) {
-        /* purecov: begin deadcode */
         auto &stat = m_share->m_stat;
         stat.finish_tuning();
 
@@ -527,7 +526,6 @@ class Client {
 
         --m_num_active_workers;
         break;
-        /* purecov: end */
       }
     }
   }

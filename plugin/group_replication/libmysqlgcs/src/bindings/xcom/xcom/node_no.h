@@ -30,8 +30,8 @@
 
 /*
   Node numbers are usually very small. A real node_no value should never close
-  to the maximum value of uint32_t. So VOID_NODE_NO is defined as the maximum
-  value of uint32_t.
+  to the maximum value of uint16_t. So VOID_NODE_NO is defined as the maximum
+  value of uint16_t.
 */
 #define VOID_NODE_NO (~((node_no)0))
 

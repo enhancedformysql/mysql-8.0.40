@@ -23,7 +23,6 @@
 
 #include "plugin/group_replication/include/group_actions/group_action_coordinator.h"
 #include "plugin/group_replication/include/group_actions/communication_protocol_action.h"
-#include "plugin/group_replication/include/group_actions/multi_primary_migration_action.h"
 #include "plugin/group_replication/include/group_actions/primary_election_action.h"
 #include "plugin/group_replication/include/leave_group_on_failure.h"
 #include "plugin/group_replication/include/plugin.h"
@@ -564,9 +563,7 @@ bool Group_action_coordinator::handle_action_start_message(
       message_type = Group_action_message::ACTION_UNKNOWN_MESSAGE;
     }
 #endif
-    if (message_type == Group_action_message::ACTION_MULTI_PRIMARY_MESSAGE)
-      action_info->executing_action = new Multi_primary_migration_action();
-    else if (message_type ==
+    if (message_type ==
              Group_action_message::ACTION_PRIMARY_ELECTION_MESSAGE)
       action_info->executing_action = new Primary_election_action();
     else if (message_type ==

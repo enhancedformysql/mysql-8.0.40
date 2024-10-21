@@ -52,9 +52,7 @@ PSI_mutex_key key_GR_LOCK_applier_module_run,
     key_GR_LOCK_group_info_manager,
     key_GR_LOCK_group_part_handler_abort,
     key_GR_LOCK_group_part_handler_run,
-    key_GR_LOCK_multi_primary_action_notification,
     key_GR_LOCK_pipeline_continuation,
-    key_GR_LOCK_pipeline_stats_flow_control,
     key_GR_LOCK_pipeline_stats_transactions_waiting_apply,
     key_GR_LOCK_plugin_modules_termination,
     key_GR_LOCK_plugin_applier_module_initialize_terminate,
@@ -158,10 +156,7 @@ PSI_rwlock_key key_GR_RWLOCK_cert_stable_gtid_set,
     key_GR_RWLOCK_plugin_running,
     key_GR_RWLOCK_plugin_stop,
     key_GR_RWLOCK_transaction_observation_list,
-    key_GR_RWLOCK_transaction_consistency_manager_map,
-    key_GR_RWLOCK_transaction_consistency_manager_prepared_transactions_on_my_applier,
-    key_GR_RWLOCK_flow_control_module_info,
-    key_GR_RWLOCK_transaction_consistency_info_members_that_must_prepare_the_transaction;
+    key_GR_RWLOCK_flow_stat_module_info;
 
 PSI_memory_key key_write_set_encoded,
     key_certification_data,
@@ -185,18 +180,6 @@ PSI_memory_key key_write_set_encoded,
 PSI_stage_info info_GR_STAGE_autorejoin = {
     0, "Undergoing auto-rejoin procedure", PSI_FLAG_STAGE_PROGRESS,
     PSI_DOCUMENT_ME};
-PSI_stage_info info_GR_STAGE_multi_primary_mode_switch_pending_transactions = {
-    0, "Multi-primary Switch: waiting for pending transactions to finish",
-    PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
-PSI_stage_info info_GR_STAGE_multi_primary_mode_switch_step_completion = {
-    0, "Multi-primary Switch: waiting on another member step completion",
-    PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
-PSI_stage_info info_GR_STAGE_multi_primary_mode_switch_buffered_transactions = {
-    0, "Multi-primary Switch: applying buffered transactions",
-    PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
-PSI_stage_info info_GR_STAGE_multi_primary_mode_switch_completion = {
-    0, "Multi-primary Switch: waiting for operation to complete on all members",
-    PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
 PSI_stage_info info_GR_STAGE_primary_election_buffered_transactions = {
     0, "Primary Election: applying buffered transactions",
     PSI_FLAG_STAGE_PROGRESS, PSI_DOCUMENT_ME};
@@ -305,14 +288,8 @@ static PSI_mutex_info all_group_replication_psi_mutex_keys[] = {
      PSI_DOCUMENT_ME},
     {&key_GR_LOCK_group_part_handler_run, "key_GR_LOCK_group_part_handler_run",
      PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-    {&key_GR_LOCK_multi_primary_action_notification,
-     "LOCK_multi_primary_action_notification", PSI_FLAG_SINGLETON, 0,
-     PSI_DOCUMENT_ME},
     {&key_GR_LOCK_pipeline_continuation, "LOCK_pipeline_continuation",
      PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-    {&key_GR_LOCK_pipeline_stats_flow_control,
-     "LOCK_pipeline_stats_flow_control", PSI_FLAG_SINGLETON, 0,
-     PSI_DOCUMENT_ME},
     {&key_GR_LOCK_pipeline_stats_transactions_waiting_apply,
      "LOCK_pipeline_stats_transactions_waiting_apply", PSI_FLAG_SINGLETON, 0,
      PSI_DOCUMENT_ME},
@@ -556,27 +533,12 @@ static PSI_rwlock_info all_group_replication_psi_rwlock_keys[] = {
     {&key_GR_RWLOCK_transaction_observation_list,
      "RWLOCK_transaction_observation_list", PSI_FLAG_SINGLETON, 0,
      PSI_DOCUMENT_ME},
-    {&key_GR_RWLOCK_transaction_consistency_manager_map,
-     "RWLOCK_transaction_consistency_manager_map", PSI_FLAG_SINGLETON, 0,
-     PSI_DOCUMENT_ME},
-    {&key_GR_RWLOCK_transaction_consistency_manager_prepared_transactions_on_my_applier,
-     "RWLOCK_transaction_consistency_manager_prepared_transactions_on_my_"
-     "applier",
-     PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-    {&key_GR_RWLOCK_flow_control_module_info, "RWLOCK_flow_control_module_info",
-     PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
-    {&key_GR_RWLOCK_transaction_consistency_info_members_that_must_prepare_the_transaction,
-     "RWLOCK_transaction_consistency_info_members_that_must_prepare_the_"
-     "transaction",
+    {&key_GR_RWLOCK_flow_stat_module_info, "RWLOCK_flow_stat_module_info",
      PSI_FLAG_SINGLETON, 0, PSI_DOCUMENT_ME},
 };
 
 static PSI_stage_info *all_group_replication_stages_keys[] = {
     &info_GR_STAGE_autorejoin,
-    &info_GR_STAGE_multi_primary_mode_switch_pending_transactions,
-    &info_GR_STAGE_multi_primary_mode_switch_step_completion,
-    &info_GR_STAGE_multi_primary_mode_switch_buffered_transactions,
-    &info_GR_STAGE_multi_primary_mode_switch_completion,
     &info_GR_STAGE_primary_election_buffered_transactions,
     &info_GR_STAGE_primary_election_pending_transactions,
     &info_GR_STAGE_primary_election_group_read_only,

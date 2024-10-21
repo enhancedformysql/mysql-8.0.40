@@ -32,6 +32,10 @@
 
 using std::string;
 
+const int GTID_WAIT_TIMEOUT = 10;  // 10 seconds
+const int LOCAL_WAIT_TIMEOUT_ERROR = -1;
+const int DELAYED_VIEW_CHANGE_RESUME_ERROR = -2;
+
 Certification_handler::Certification_handler()
     : cert_module(nullptr),
       applier_module_thd(nullptr),
@@ -240,7 +244,6 @@ int Certification_handler::handle_transaction_id(Pipeline_event *pevent,
   Transaction_context_log_event *tcle = nullptr;
   Log_event *event = nullptr;
   Gtid_log_event *gle = nullptr;
-  Members_list *online_members = pevent->get_online_members();
 
   /*
     Get transaction context.
@@ -270,18 +273,6 @@ int Certification_handler::handle_transaction_id(Pipeline_event *pevent,
                UUID_LENGTH);
 
   /*
-    Group contains members that do not support transactions with group
-    coordination, thence the transaction must rollback.
-  */
-  DBUG_EXECUTE_IF(
-      "group_replication_force_lower_version_on_group_replication_consistency",
-      { online_members = nullptr; };);
-  if (pevent->get_consistency_level() >= GROUP_REPLICATION_CONSISTENCY_AFTER &&
-      nullptr == online_members) {
-    goto after_certify;
-  }
-
-  /*
     Certify transaction.
   */
   seq_number =
@@ -289,7 +280,6 @@ int Certification_handler::handle_transaction_id(Pipeline_event *pevent,
                            !tcle->is_gtid_specified(), tcle->get_server_uuid(),
                            gle, local_transaction);
 
-after_certify:
   if (local_transaction) {
     /*
       Local transaction.
@@ -329,15 +319,12 @@ after_certify:
     }
 
     if (seq_number > 0) {
-      const rpl_sid *sid = nullptr;
-      rpl_sidno sidno = group_sidno;
       rpl_gno gno = seq_number;
 
       if (tcle->is_gtid_specified()) {
-        sid = gle->get_sid();
-        sidno = gle->get_sidno(true);
         gno = gle->get_gno();
-        error = cert_module->add_specified_gtid_to_group_gtid_executed(gle);
+        error =
+            cert_module->add_specified_gtid_to_group_gtid_executed(gle, true);
         DBUG_EXECUTE_IF("unable_to_add_specified_gtid_for_local_transaction",
                         error = 1;);
 
@@ -349,29 +336,11 @@ after_certify:
           goto end;
         }
       } else {
-        if (cert_module->add_group_gtid_to_group_gtid_executed(gno)) {
+        if (cert_module->add_group_gtid_to_group_gtid_executed(gno, true)) {
           /* purecov: begin inspected */
           LogPluginErr(ERROR_LEVEL,
                        ER_GRP_RPL_ADD_GTID_INFO_WITHOUT_LOCAL_GTID_FAILED);
           transactions_latch->releaseTicket(tcle->get_thread_id());
-          cont->signal(1, true);
-          error = 1;
-          goto end;
-          /* purecov: end */
-        }
-      }
-
-      if (pevent->get_consistency_level() >=
-          GROUP_REPLICATION_CONSISTENCY_AFTER) {
-        Transaction_consistency_info *transaction_consistency_info =
-            new Transaction_consistency_info(
-                tcle->get_thread_id(), local_transaction, sid, sidno, gno,
-                pevent->get_consistency_level(), pevent->get_online_members());
-        pevent->release_online_members_memory_ownership();
-        if (transaction_consistency_manager->after_certification(
-                transaction_consistency_info)) {
-          /* purecov: begin inspected */
-          delete transaction_consistency_info;
           cont->signal(1, true);
           error = 1;
           goto end;
@@ -384,9 +353,7 @@ after_certify:
       We only release the local transaction here when its consistency
       does not require group coordination.
     */
-    if ((seq_number <= 0 || pevent->get_consistency_level() <
-                                GROUP_REPLICATION_CONSISTENCY_AFTER) &&
-        transactions_latch->releaseTicket(tcle->get_thread_id())) {
+    if (transactions_latch->releaseTicket(tcle->get_thread_id())) {
       /* purecov: begin inspected */
       LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_NOTIFY_CERTIFICATION_OUTCOME_FAILED);
       cont->signal(1, true);
@@ -402,7 +369,6 @@ after_certify:
       Remote transaction.
     */
     if (seq_number > 0) {
-      const rpl_sid *sid = nullptr;
       rpl_sidno sidno = group_sidno;
       rpl_gno gno = seq_number;
 
@@ -418,18 +384,13 @@ after_certify:
             gle->immediate_server_version);
         // Copy the transaction length to the new event.
         gle_generated->set_trx_length(gle->transaction_length);
-        // Assign the commit order to this transaction.
-        const auto ticket_opaque =
-            binlog::Bgc_ticket_manager::instance().assign_session_to_ticket();
-        gle_generated->set_commit_group_ticket_and_update_transaction_length(
-            ticket_opaque.get());
 
         pevent->reset_pipeline_event();
         pevent->set_LogEvent(gle_generated);
 
         // Add the gtid information in the executed gtid set for the remote
         // transaction which have gtid specified.
-        if (cert_module->add_group_gtid_to_group_gtid_executed(gno)) {
+        if (cert_module->add_group_gtid_to_group_gtid_executed(gno, false)) {
           /* purecov: begin inspected */
           LogPluginErr(ERROR_LEVEL,
                        ER_GRP_RPL_ADD_GTID_INFO_WITHOUT_REMOTE_GTID_FAILED);
@@ -441,17 +402,10 @@ after_certify:
       }
 
       else {
-        sid = gle->get_sid();
         sidno = gle->get_sidno(true);
         gno = gle->get_gno();
 
-        // Assign the commit order to this transaction.
-        const auto ticket_opaque =
-            binlog::Bgc_ticket_manager::instance().assign_session_to_ticket();
-        gle->set_commit_group_ticket_and_update_transaction_length(
-            ticket_opaque.get());
-
-        error = cert_module->add_specified_gtid_to_group_gtid_executed(gle);
+        error = cert_module->add_specified_gtid_to_group_gtid_executed(gle, false);
         DBUG_EXECUTE_IF("unable_to_add_specified_gtid_for_remote_transaction",
                         error = 1;);
 
@@ -460,24 +414,6 @@ after_certify:
           LogPluginErr(ERROR_LEVEL,
                        ER_GRP_RPL_ADD_GTID_INFO_WITH_REMOTE_GTID_FAILED);
           cont->signal(1, true);
-          goto end;
-          /* purecov: end */
-        }
-      }
-
-      if (pevent->get_consistency_level() >=
-          GROUP_REPLICATION_CONSISTENCY_AFTER) {
-        Transaction_consistency_info *transaction_consistency_info =
-            new Transaction_consistency_info(
-                tcle->get_thread_id(), local_transaction, sid, sidno, gno,
-                pevent->get_consistency_level(), pevent->get_online_members());
-        pevent->release_online_members_memory_ownership();
-        if (transaction_consistency_manager->after_certification(
-                transaction_consistency_info)) {
-          /* purecov: begin inspected */
-          delete transaction_consistency_info;
-          cont->signal(1, true);
-          error = 1;
           goto end;
           /* purecov: end */
         }
@@ -503,6 +439,7 @@ end:
 int Certification_handler::extract_certification_info(Pipeline_event *pevent,
                                                       Continuation *cont) {
   DBUG_TRACE;
+  int error = 0;
 
   if (pevent->get_event_context() != SINGLE_VIEW_EVENT) {
     /*
@@ -516,11 +453,13 @@ int Certification_handler::extract_certification_info(Pipeline_event *pevent,
     next(pevent, cont);
     return 0;
   }
+
   if (pevent->is_delayed_view_change_waiting_for_consistent_transactions()) {
+    std::string local_gtid_certified_string{};
+    cert_module->get_local_certified_gtid(local_gtid_certified_string);
     pending_view_change_events_waiting_for_consistent_transactions.push_back(
         std::make_unique<View_change_stored_info>(
-            pevent, cert_module->generate_view_change_group_gtid(),
-            generate_view_change_bgc_ticket()));
+            pevent, local_gtid_certified_string, cert_module->generate_view_change_group_gtid()));
     cont->set_transation_discarded(true);
     cont->signal(0, cont->is_transaction_discarded());
     return 0;
@@ -533,17 +472,145 @@ int Certification_handler::extract_certification_info(Pipeline_event *pevent,
     On that case we need to queue it on the group applier wrapped
     on a transaction with a group generated GTID.
   */
-  int error = log_view_change_event_in_order(pevent, cont);
+
+  /*
+    If there are pending view changes to apply, apply them first.
+    If we can't apply the old VCLEs probably we can't apply the new one
+  */
+  if (unlikely(m_view_change_event_on_wait)) {
+    error = log_delayed_view_change_events(cont);
+    m_view_change_event_on_wait = !pending_view_change_events.empty();
+  }
+
+  std::string local_gtid_certified_string;
+  Gtid vlce_gtid = {-1, -1};
+  if (!error) {
+    error = log_view_change_event_in_order(pevent, local_gtid_certified_string,
+                                           &vlce_gtid, cont);
+  }
+
+  /*
+    If there are was a timeout applying this or an older view change,
+    just store the event for future application.
+  */
   if (error) {
-    cont->signal(1, false);
+    if (LOCAL_WAIT_TIMEOUT_ERROR == error) {
+      error = store_view_event_for_delayed_logging(
+          pevent, local_gtid_certified_string, vlce_gtid, cont);
+      LogPluginErr(WARNING_LEVEL, ER_GRP_DELAYED_VCLE_LOGGING);
+      if (error)
+        cont->signal(1, false);
+      else
+        cont->signal(0, cont->is_transaction_discarded());
+    } else
+      cont->signal(1, false);
   }
 
   return error;
 }
 
-int Certification_handler::inject_transactional_events(
-    Pipeline_event *pevent, Gtid gtid, binlog::BgcTicket::ValueType bgc_ticket,
+int Certification_handler::log_delayed_view_change_events(Continuation *cont) {
+  DBUG_TRACE;
+
+  int error = 0;
+
+  while (!pending_view_change_events.empty() && !error) {
+    View_change_stored_info *stored_view_info =
+        pending_view_change_events.front();
+    error = log_view_change_event_in_order(
+        stored_view_info->view_change_pevent,
+        stored_view_info->local_gtid_certified,
+        &(stored_view_info->view_change_gtid), cont);
+    // if we timeout keep the event
+    if (LOCAL_WAIT_TIMEOUT_ERROR != error) {
+      delete stored_view_info->view_change_pevent;
+      delete stored_view_info;
+      pending_view_change_events.pop_front();
+    }
+  }
+  return error;
+}
+
+int Certification_handler::store_view_event_for_delayed_logging(
+    Pipeline_event *pevent, std::string &local_gtid_certified_string, Gtid gtid,
     Continuation *cont) {
+  DBUG_TRACE;
+
+  int error = 0;
+
+  Log_event *event = nullptr;
+  error = pevent->get_LogEvent(&event);
+  if (error || (event == nullptr)) {
+    /* purecov: begin inspected */
+    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_FETCH_VIEW_CHANGE_LOG_EVENT_FAILED);
+    return 1;
+    /* purecov: end */
+  }
+  View_change_log_event *vchange_event =
+      static_cast<View_change_log_event *>(event);
+  std::string view_change_event_id(vchange_event->get_view_id());
+
+  // -1 means there was a second timeout on a VCLE that we already delayed
+  if (view_change_event_id != "-1") {
+    m_view_change_event_on_wait = true;
+    View_change_stored_info *vcle_info =
+        new View_change_stored_info(pevent, local_gtid_certified_string, gtid);
+    pending_view_change_events.push_back(vcle_info);
+    // Use the discard flag to let the applier know this was delayed
+    cont->set_transation_discarded(true);
+  }
+
+  // Add a packet back to the applier queue so it is processed in a later stage.
+  std::string delayed_view_id("-1");
+  View_change_packet *view_change_packet =
+      new View_change_packet(delayed_view_id);
+  applier_module->add_view_change_packet(view_change_packet);
+
+  return error;
+}
+
+int Certification_handler::wait_for_local_transaction_execution(
+    std::string &local_gtid_certified_string) {
+  DBUG_TRACE;
+  int error = 0;
+
+  if (local_gtid_certified_string.empty()) {
+    if (!cert_module->get_local_certified_gtid(local_gtid_certified_string)) {
+      return 0;  // set is empty, we don't need to wait
+    }
+  }
+
+  Sql_service_command_interface *sql_command_interface =
+      new Sql_service_command_interface();
+
+  if (sql_command_interface->establish_session_connection(PSESSION_USE_THREAD,
+                                                          GROUPREPL_USER)) {
+    /* purecov: begin inspected */
+    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_CONTACT_WITH_SRV_FAILED);
+    delete sql_command_interface;
+    return 1;
+    /* purecov: end */
+  }
+
+  if ((error = sql_command_interface->wait_for_server_gtid_executed(
+           local_gtid_certified_string, GTID_WAIT_TIMEOUT))) {
+    /* purecov: begin inspected */
+    if (error == -1)  // timeout
+    {
+      LogPluginErr(WARNING_LEVEL, ER_GRP_RPL_SRV_WAIT_TIME_OUT);
+      error = LOCAL_WAIT_TIMEOUT_ERROR;
+    } else {
+      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_SRV_GTID_WAIT_ERROR);
+    }
+    /* purecov: end */
+  }
+  delete sql_command_interface;
+  return error;
+}
+
+int Certification_handler::inject_transactional_events(Pipeline_event *pevent,
+                                                       Gtid *gtid,
+                                                       Continuation *cont) {
   DBUG_TRACE;
   Log_event *event = nullptr;
   Format_description_log_event *fd_event = nullptr;
@@ -566,20 +633,14 @@ int Certification_handler::inject_transactional_events(
 
   // GTID event
 
-  /*
-    The bgc_ticket must be generated at the same time the GTID is
-    generated.
-  */
-  if (gtid.gno == -1) {
-    assert(0 == bgc_ticket);
-    gtid = cert_module->generate_view_change_group_gtid();
-    bgc_ticket = generate_view_change_bgc_ticket();
+  if (gtid->gno == -1) {
+    *gtid = cert_module->generate_view_change_group_gtid();
   }
-  if (gtid.gno <= 0 || 0 == bgc_ticket) {
+  if (gtid->gno <= 0) {
     cont->signal(1, true);
     return 1;
   }
-  Gtid_specification gtid_specification = {ASSIGNED_GTID, gtid};
+  Gtid_specification gtid_specification = {ASSIGNED_GTID, *gtid};
   /**
    The original_commit_timestamp for this GTID will be different for each
    member that generated this View_change_event.
@@ -589,10 +650,12 @@ int Certification_handler::inject_transactional_events(
   Gtid_log_event *gtid_log_event = new Gtid_log_event(
       event->server_id, true, 0, 0, true, time_stamp_now, time_stamp_now,
       gtid_specification, server_version, server_version);
-  gtid_log_event->commit_group_ticket = bgc_ticket;
 
   Pipeline_event *gtid_pipeline_event =
       new Pipeline_event(gtid_log_event, fd_event);
+
+  gtid_pipeline_event->set_view_generated();
+
   next(gtid_pipeline_event, cont);
 
   int error = cont->wait();
@@ -642,11 +705,11 @@ int Certification_handler::inject_transactional_events(
 }
 
 int Certification_handler::log_view_change_event_in_order(
-    Pipeline_event *view_pevent, Continuation *cont) {
+    Pipeline_event *view_pevent, std::string &local_gtid_string, Gtid *gtid,
+    Continuation *cont) {
   DBUG_TRACE;
 
-  Gtid gtid = {-1, -1};
-  binlog::BgcTicket::ValueType bgc_ticket = 0;
+  int error = 0;
 
   /*
     If this view was delayed to wait for consistent transactions to finish, we
@@ -655,8 +718,7 @@ int Certification_handler::log_view_change_event_in_order(
   if (view_pevent->is_delayed_view_change_resumed()) {
     auto &stored_view_info =
         pending_view_change_events_waiting_for_consistent_transactions.front();
-    gtid = stored_view_info->view_change_gtid;
-    bgc_ticket = stored_view_info->bgc_ticket;
+    *gtid = stored_view_info->view_change_gtid;
     pending_view_change_events_waiting_for_consistent_transactions.pop_front();
   }
 
@@ -681,7 +743,7 @@ int Certification_handler::log_view_change_event_in_order(
     if first handled (no GITD) or when it is being resumed after waiting from
     consistent transactions.
   */
-  if ((-1 == gtid.gno) || view_pevent->is_delayed_view_change_resumed()) {
+  if ((-1 == gtid->gno) || view_pevent->is_delayed_view_change_resumed()) {
     std::map<std::string, std::string> cert_info;
     cert_module->get_certification_info(&cert_info);
     size_t event_size = 0;
@@ -699,37 +761,33 @@ int Certification_handler::log_view_change_event_in_order(
           "Certification information is too large for transmission.";
       vchange_event->set_certification_info(&cert_info, &event_size);
     }
+    LogPluginErrMsg(
+        INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+        "after setting certification info in log_view_change_event_in_order");
   }
 
-  /**
-   Create a transactional block for the View change log event
-   GTID
-   BEGIN
-   VCLE
-   COMMIT
-  */
-  return inject_transactional_events(view_pevent, gtid, bgc_ticket, cont);
-}
+  // Assure the last known local transaction was already executed
+  error = wait_for_local_transaction_execution(local_gtid_string);
 
-binlog::BgcTicket::ValueType
-Certification_handler::generate_view_change_bgc_ticket() {
-  auto &ticket_manager = binlog::Bgc_ticket_manager::instance();
-  /*
-    Increment ticket so that the all transactions ordered before
-    view will have a ticket smaller than the one assigned to the
-    view.
-  */
-  ticket_manager.push_new_ticket();
-  ticket_manager.pop_front_ticket();
-  /*
-    Generate a commit ticket and increment again the ticket so that
-    all transactions ordered after the view will have a ticket
-    greater that the one assigned to the view.
-  */
-  auto [ticket, _] =
-      ticket_manager.push_new_ticket(binlog::BgcTmOptions::inc_session_count);
+  DBUG_EXECUTE_IF("simulate_delayed_view_change_resume_error", { error = 1; });
 
-  return ticket.get();
+  if (!error) {
+    /**
+     Create a transactional block for the View change log event
+     GTID
+     BEGIN
+     VCLE
+     COMMIT
+    */
+    error = inject_transactional_events(view_pevent, gtid, cont);
+  } else if (view_pevent->is_delayed_view_change_resumed()) {
+    error = DELAYED_VIEW_CHANGE_RESUME_ERROR;
+  } else if ((LOCAL_WAIT_TIMEOUT_ERROR == error) && (-1 == gtid->gno)) {
+    // Even if we can't log it, register the position
+    *gtid = cert_module->generate_view_change_group_gtid();
+  }
+
+  return error;
 }
 
 bool Certification_handler::is_unique() { return true; }

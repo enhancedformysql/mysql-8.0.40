@@ -84,8 +84,6 @@
 --eval SET @@global.group_replication_local_address="$local_address_server1"
 --replace_result $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
 --eval SET @@global.group_replication_group_name="$group_replication_group_name"
---eval SET @@global.group_replication_enforce_update_everywhere_checks=0
---eval SET @@global.group_replication_single_primary_mode=1
 
 # Stop the secondary member which is probable to become a primary
 --let $rpl_connection_name= server2

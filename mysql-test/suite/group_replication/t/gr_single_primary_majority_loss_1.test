@@ -23,7 +23,6 @@
 --source include/have_group_replication_plugin.inc
 --let $rpl_server_count= 3
 --let $rpl_skip_group_replication_start= 1
---let $rpl_group_replication_single_primary_mode=1
 --source include/group_replication.inc
 
 # Start group replication on all the servers
@@ -94,8 +93,6 @@
 --eval SET @@global.group_replication_local_address="$local_address_server2"
 --replace_result $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
 --eval SET @@global.group_replication_group_name="$group_replication_group_name"
---eval SET @@global.group_replication_enforce_update_everywhere_checks=OFF
---eval SET @@global.group_replication_single_primary_mode=ON
 
 --let $rpl_connection_name= server_3
 --source include/rpl_connection.inc
@@ -105,8 +102,6 @@
 --eval SET @@global.group_replication_local_address="$local_address_server3"
 --replace_result $group_replication_group_name GROUP_REPLICATION_GROUP_NAME
 --eval SET @@global.group_replication_group_name="$group_replication_group_name"
---eval SET @@global.group_replication_enforce_update_everywhere_checks=OFF
---eval SET @@global.group_replication_single_primary_mode=ON
 
 --let $rpl_connection_name= server1
 --source include/rpl_connection.inc

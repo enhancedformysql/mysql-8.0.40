@@ -30,7 +30,6 @@
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_sqlcommand.h"
-#include "sql/binlog/group_commit/bgc_ticket_manager.h"  // Bgc_ticket_manager
 #include "sql/binlog_ostream.h"
 #include "sql/psi_memory_resource.h"  // memory_resource
 #include "sql/rpl_gtid.h"             // Gtid_set
@@ -225,57 +224,9 @@ Transaction_compression_ctx::managed_buffer_sequence() {
   return m_managed_buffer_sequence;
 }
 
-binlog::BgcTicket Binlog_group_commit_ctx::get_session_ticket() {
-  return this->m_session_ticket;
-}
-
-void Binlog_group_commit_ctx::set_session_ticket(binlog::BgcTicket ticket) {
-  if (Binlog_group_commit_ctx::manual_ticket_setting()->load()) {
-    assert(this->m_session_ticket.is_set() == false);
-    this->m_session_ticket = ticket;
-  }
-}
-
-void Binlog_group_commit_ctx::assign_ticket() {
-  if (this->m_session_ticket.is_set()) {
-    return;
-  }
-  auto ticket_opaque =
-      binlog::Bgc_ticket_manager::instance().assign_session_to_ticket();
-  this->m_session_ticket = ticket_opaque;
-}
-
-bool Binlog_group_commit_ctx::has_waited() { return this->m_has_waited; }
-
-void Binlog_group_commit_ctx::mark_as_already_waited() {
-  this->m_has_waited = true;
-}
-
 void Binlog_group_commit_ctx::reset() {
-  this->m_session_ticket = binlog::BgcTicket(binlog::BgcTicket::kTicketUnset);
-  this->m_has_waited = false;
   m_max_size_exceeded = false;
   m_force_rotate = false;
-}
-
-std::string Binlog_group_commit_ctx::to_string() const {
-  std::ostringstream oss;
-  this->format(oss);
-  return oss.str();
-}
-
-void Binlog_group_commit_ctx::format(std::ostream &out) const {
-  out << "Binlog_group_commit_ctx (" << std::hex << this << std::dec
-      << "):" << std::endl
-      << " · m_session_ticket: " << this->m_session_ticket << std::endl
-      << " · m_has_waited: " << this->m_has_waited << std::endl
-      << " · manual_ticket_setting(): " << manual_ticket_setting()->load()
-      << std::flush;
-}
-
-memory::Aligned_atomic<bool> &Binlog_group_commit_ctx::manual_ticket_setting() {
-  static memory::Aligned_atomic<bool> flag{false};
-  return flag;
 }
 
 std::pair<bool, bool> Binlog_group_commit_ctx::aggregate_rotate_settings(
@@ -307,3 +258,4 @@ Rpl_thd_context::get_tx_rpl_delegate_stage_status() {
 Binlog_group_commit_ctx &Rpl_thd_context::binlog_group_commit_ctx() {
   return this->m_binlog_group_commit_ctx;
 }
+

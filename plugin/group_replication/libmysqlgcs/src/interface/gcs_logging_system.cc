@@ -72,10 +72,8 @@ enum_gcs_error Gcs_async_buffer::initialize() {
   enum_gcs_error ret_sink = m_sink->initialize();
 
   if (ret_sink == GCS_NOK) {
-    /* purecov: begin deadcode */
     std::cerr << "Unable to create associated sink." << std::endl;
     return GCS_NOK;
-    /* purecov: end */
   }
 
   if (m_initialized) return GCS_OK;
@@ -99,7 +97,6 @@ enum_gcs_error Gcs_async_buffer::initialize() {
   if ((ret_thread =
            m_consumer->create(key_GCS_THD_Gcs_ext_logger_impl_m_consumer,
                               nullptr, consumer_function, (void *)this))) {
-    /* purecov: begin deadcode */
     std::cerr << "Unable to create Gcs_async_buffer consumer thread, "
               << ret_thread << std::endl;
 
@@ -108,7 +105,6 @@ enum_gcs_error Gcs_async_buffer::initialize() {
     m_free_buffer_mutex->destroy();
 
     return GCS_NOK;
-    /* purecov: end */
   }
 
   m_initialized = true;
@@ -168,10 +164,8 @@ int64_t Gcs_async_buffer::get_write_index() {
   m_free_buffer_mutex->lock();
   assert(m_number_entries <= m_buffer_size && m_number_entries >= 0);
   while (m_number_entries == m_buffer_size) {
-    /* purecov: begin deadcode */
     wake_up_consumer();
     m_free_buffer_cond->wait(m_free_buffer_mutex->get_native_mutex());
-    /* purecov: end */
   }
   write_index = m_write_index++;
   m_number_entries++;
@@ -235,9 +229,7 @@ void Gcs_async_buffer::consume_events() {
       int64_t max_entries = (m_buffer_size / 25);
       assert(number_entries != 0);
       if (number_entries > max_entries && max_entries != 0)
-        /* purecov: begin deadcode */
         number_entries = max_entries;
-      /* purecov: end */
       to_read = number_entries, read = number_entries;
       while (to_read != 0) {
         m_buffer[get_index(m_read_index)].flush_event(*m_sink);
@@ -275,7 +267,6 @@ const std::string Gcs_async_buffer::get_information() const {
   return ss.str();
 }
 
-/* purecov: begin deadcode */
 Gcs_output_sink::Gcs_output_sink() : m_initialized(false) {}
 
 enum_gcs_error Gcs_output_sink::initialize() {

@@ -43,30 +43,53 @@
 #include "xcom/sock_probe.h"
 #include "xcom/synode_no.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/x_platform.h"
 #include "xcom/xcom_base.h"
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_detector.h"
 #include "xcom/xcom_interface.h"
+#include "xcom/xcom_limits.h"
 #include "xcom/xcom_transport.h"
 #include "xdr_gen/xcom_vp.h"
 
 extern task_env *detector;
 extern int xcom_shutdown;
 extern linkage detector_wait;
-#define MAX_SILENT 4.0
+extern int all_nodes_valid;
 
-#define DETECT(site, i)      \
-  (i == get_nodeno(site)) || \
-      (site->detected[i] + DETECTOR_LIVE_TIMEOUT > task_now())
+int may_be_dead(detector_state const ds, node_no i, double seconds, int silent,
+                int unreachable) {
+  if (ds[i] == 0.0) {
+    return 0;
+  }
+  if (unreachable) {
+    return 1;
+  } else {
+    return ds[i] < seconds - silent;
+  }
+ }
 
-/* static double	detected[NSERVERS]; */
+static int detect_node_timeout(site_def const *site, node_no node) {
+  int alive = 1;
+  double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+  double current = task_now();
+  double diff = current - site->servers[node]->large_transfer_detected;
+  if (diff < DEFAULT_SILENT) {
+    timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+  } else if (site->servers[node]->unreachable == DIRECT_ABORT_CONN) {
+    alive = 0;
+  } else {
+    if (site->servers[node]->unreachable >= MAX_CONNECT_FAIL_TIMES) {
+      timeout = 1;
+    }
+  }
+  if (alive) {
+    return (node == get_nodeno(site)) ||
+      (site->detected[node] + timeout > current);
+  } else {
+    return 0;
+  }
 
-/* See if node has been suspiciously still for some time */
-int may_be_dead(detector_state const ds, node_no i, double seconds) {
-  /* IFDBG(D_DETECT, FN; NDBG(i,u); NDBG(ds[i] < seconds - 2.0, d)); */
-  return ds[i] < seconds - MAX_SILENT;
 }
 
 void init_detector(detector_state ds) {
@@ -78,13 +101,11 @@ void init_detector(detector_state ds) {
 
 int note_detected(site_def const *site, node_no node) {
   int retval = 1;
-  /* IFDBG(D_DETECT, FN; NDBG(node,d);); */
-
   /* site->servers's size is NSERVERS. */
   assert(site->nodes.node_list_len <= NSERVERS);
 
   if (site && node < site->nodes.node_list_len) {
-    retval = DETECT(site, node);
+    retval = detect_node_timeout(site, node);
     server_detected(site->servers[node]);
   }
   return retval;
@@ -114,8 +135,6 @@ int is_server_connected(struct site_def const *site, node_no node) {
 }
 
 static void reset_detected(site_def const *site, u_int node) {
-  IFDBG(D_DETECT, FN; PTREXP(site); NDBG(node, d););
-  /* site->servers's size is NSERVERS. */
   assert(site->nodes.node_list_len <= NSERVERS);
   if (site && node < site->nodes.node_list_len) {
     site->servers[node]->detected = 0.0;
@@ -135,32 +154,16 @@ void reset_disjunct_servers(struct site_def const *old_site,
   }
 }
 
-static void dbg_detected(site_def *site) {
+void update_detected(site_def *site, double conn_rtt) {
   u_int node;
 
   if (site) {
     for (node = 0; node < site->nodes.node_list_len; node++) {
-      IFDBG(D_DETECT, FN; NDBG(node, d); NDBG(site->detected[node], f);
-            NDBG(site->servers[node]->detected, f));
-    }
-  }
-}
-
-void update_detected(site_def *site) {
-  u_int node;
-
-  if (site) {
-    bool_t changed = FALSE;
-    for (node = 0; node < site->nodes.node_list_len; node++) {
-      IFDBG(D_DETECT, FN; NDBG(node, d); NDBG(site->detected[node], f);
-            NDBG(site->servers[node]->detected, f));
-      if (site->detected[node] != site->servers[node]->detected) changed = TRUE;
       site->detected[node] = site->servers[node]->detected;
     }
     site->detector_updated = 1;
-
-    if (changed) {
-      dbg_detected(site);
+    if (conn_rtt > 0 && site->max_conn_rtt < conn_rtt) {
+      site->max_conn_rtt = conn_rtt;
     }
   }
 }
@@ -172,24 +175,20 @@ int enough_live_nodes(site_def *site) {
   node_no maxnodes = get_maxnodes(site);
   node_no self = get_nodeno(site);
 
-  update_detected(site);
+  update_detected(site, 0);
 
-  /* IFDBG(D_DETECT, FN; NDBG(maxnodes,d); );*/
   if (maxnodes == 0) return 0;
   for (i = 0; i < maxnodes; i++) {
-    if (i == self || t - site->detected[i] < DETECTOR_LIVE_TIMEOUT) {
+    double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+    double diff = task_now() - site->servers[i]->large_transfer_detected;
+    if (diff < DEFAULT_SILENT) {
+      timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+    }
+    if (i == self || t - site->detected[i] < timeout) {
       n++;
     }
   }
-/* IFDBG(D_DETECT, FN; NDBG(maxnodes,d); NDBG(n,d);); */
-#ifdef NODE_0_IS_ARBITRATOR
-  return maxnodes > 0 &&
-         (n > maxnodes / 2 ||
-          (ARBITRATOR_HACK && (get_nodeno(site) == 0) && (2 == maxnodes)));
-#else
-  return maxnodes > 0 &&
-         (n > maxnodes / 2 || (ARBITRATOR_HACK && (2 == maxnodes)));
-#endif
+  return maxnodes > 0 && (n > maxnodes / 2);
 }
 
 static void send_my_view(site_def const *site);
@@ -209,42 +208,25 @@ static void check_global_node_set(site_def *site, int *notify) {
   u_int nodes = get_maxnodes(site);
 
   site->global_node_count = 0;
+  all_nodes_valid = 1;
   for (i = 0; i < nodes && i < site->global_node_set.node_set_len; i++) {
-    int detect = DETECT(site, i);
-    IFDBG(
-        D_DETECT, if (i == 0) {
-          FN;
-          NDBG(task_now(), f);
-        });
-    IFDBG(D_DETECT, FN; NDBG(i, d); NDBG(detect, d);
-          NDBG(site->detected[i], f));
+    int detect = detect_node_timeout(site, i);
+    if (!detect) {
+      all_nodes_valid = 0;
+    }
     if (site->global_node_set.node_set_val[i]) site->global_node_count++;
     if (site->global_node_set.node_set_val[i] != detect) {
       *notify = 1;
     }
-    IFDBG(D_DETECT, FN; NDBG(i, u); NDBG(*notify, d));
   }
 }
 
-static void check_local_node_set(site_def *site, int *notify) {
-  u_int i;
-  u_int nodes = get_maxnodes(site);
-
-  for (i = 0; i < nodes && i < site->local_node_set.node_set_len; i++) {
-    int detect = DETECT(site, i);
-    if (site->local_node_set.node_set_val[i] != detect) {
-      site->local_node_set.node_set_val[i] = detect;
-      *notify = 1;
-    }
-    IFDBG(D_DETECT, FN; NDBG(i, u); NDBG(*notify, d));
-  }
-}
-
-static node_no get_leader(site_def const *s) {
+static node_no leader(site_def const *s) {
   if (s) {
     node_no leader = 0;
     for (leader = 0; leader < get_maxnodes(s); leader++) {
-      if (!may_be_dead(s->detected, leader, task_now()) &&
+      if (!may_be_dead(s->detected, leader, task_now(), DEFAULT_SILENT,
+                       s->servers[leader]->unreachable) &&
           is_set(s->global_node_set, leader))
         return leader;
     }
@@ -256,17 +238,142 @@ int iamtheleader(site_def const *s) {
   if (!s)
     return 0;
   else
-    return get_leader(s) == s->nodeno;
+    return leader(s) == s->nodeno;
 }
 
 extern synode_no executed_msg;
 extern synode_no max_synode;
 
 static site_def *last_x_site = nullptr;
+static site_def *last_p_site = nullptr;
+server_timewait_info server_timewait[NSERVERS];
 
 void invalidate_detector_sites(site_def *site) {
+ if (last_p_site == site) {
+    last_p_site = NULL;
+  }
+
   if (last_x_site == site) {
     last_x_site = nullptr;
+  }
+}
+
+static void initiate_server_timeout() {
+  u_int i;
+  for (i = 0; i < NSERVERS; i++) {
+    server_timewait[i].last_removed_time = task_now();
+    memset(server_timewait[i].ip, 0, IP_MAX_SIZE);
+    server_timewait[i].port = 0;
+    server_timewait[i].occupied = 0;
+    server_timewait[i].timeout = 0;
+  }
+}
+
+void notify_detector_when_forced() { initiate_server_timeout(); }
+
+static inline void save_server_timeout(server_timewait_info *server_info,
+                                       const char *ip, xcom_port port,
+                                       int timeout) {
+  server_info->last_removed_time = task_now();
+  server_info->occupied = 1;
+  strcpy(server_info->ip, ip);
+  server_info->port = port;
+  server_info->timeout = timeout;
+}
+
+void notify_detector_when_needed(const char *ip, xcom_port port, int timeout) {
+  u_int j;
+  for (j = 0; j < NSERVERS; j++) {
+    if (server_timewait[j].occupied) {
+      double diff = task_now() - server_timewait[j].last_removed_time;
+      if (diff > 60.0) {
+        save_server_timeout(server_timewait + j, ip, port, timeout);
+        break;
+      } else {
+        int retval = ((port == server_timewait[j].port) &&
+                      strcmp(ip, server_timewait[j].ip) == 0);
+        if (retval) {
+          save_server_timeout(server_timewait + j, ip, port, timeout);
+          break;
+        } else {
+          continue;
+        }
+      }
+    } else {
+      save_server_timeout(server_timewait + j, ip, port, timeout);
+      break;
+    }
+  }
+}
+
+void notify_detector_when_removed(u_int n, node_address *names, int timeout) {
+  u_int i;
+  for (i = 0; i < n; i++) {
+    node_address const *name = names + i;
+    char ip[IP_MAX_SIZE];
+    xcom_port port;
+    int error = get_ip_and_port(name->address, ip, &port);
+    if (!error) {
+      notify_detector_when_needed(ip, port, timeout);
+    }
+  }
+}
+
+int ask_for_detector_if_added_ok(u_int n, node_address *names) {
+  u_int i;
+
+  if (n > 1) {
+    G_WARNING("ask_for_detector_if_added_ok num:%u, not expected", n);
+    return 1;
+  }
+
+  for (i = 0; i < n; i++) {
+    node_address const *name = names + i;
+    char ip[IP_MAX_SIZE];
+    xcom_port port;
+    int error = get_ip_and_port(name->address, ip, &port);
+    if (!error) {
+      u_int j;
+      for (j = 0; j < NSERVERS; j++) {
+        if (server_timewait[j].occupied) {
+          int retval = ((port == server_timewait[j].port) &&
+                        strcmp(ip, server_timewait[j].ip) == 0);
+          if (retval) {
+            double diff = task_now() - server_timewait[j].last_removed_time;
+            if (diff <= server_timewait[j].timeout) {
+              return 0;
+            } else {
+              return 1;
+            }
+          } else {
+            continue;
+          }
+        } else {
+          break;
+        }
+      }
+    } else {
+      G_WARNING("ask_for_detector_if_added_ok get ip and port error");
+    }
+  }
+
+  return 1;
+}
+
+static void check_local_node_set(site_def *site, int *notify) {
+  u_int i;
+  u_int nodes = get_maxnodes(site);
+
+  all_nodes_valid = 1;
+  for (i = 0; i < nodes && i < site->local_node_set.node_set_len; i++) {
+    int detect = detect_node_timeout(site, i);
+    if (!detect) {
+      all_nodes_valid = 0;
+    }
+    if (site->local_node_set.node_set_val[i] != detect) {
+      site->local_node_set.node_set_val[i] = detect;
+      *notify = 1;
+    }
   }
 }
 
@@ -281,38 +388,28 @@ int detector_task(task_arg arg [[maybe_unused]]) {
 
   TASK_BEGIN
   last_x_site = nullptr;
+  last_p_site = nullptr;
   ep->notify = 1;
   ep->local_notify = 1;
-  IFDBG(D_DETECT, FN;);
+  initiate_server_timeout();
   while (!xcom_shutdown) {
     {
       site_def *x_site = get_executor_site_rw();
-
-      IFDBG(D_DETECT, FN; SYCEXP(executed_msg); SYCEXP(max_synode));
-      IFDBG(D_DETECT, FN; PTREXP(x_site); NDBG(get_nodeno(x_site), u));
 
       if (x_site && get_nodeno(x_site) != VOID_NODE_NO) {
         if (x_site != last_x_site) {
           reset_disjunct_servers(last_x_site, x_site);
         }
-        update_detected(x_site);
+        update_detected(x_site, 0);
         if (x_site != last_x_site) {
           last_x_site = x_site;
           ep->notify = 1;
           ep->local_notify = 1;
         }
 
-        IFDBG(D_DETECT, FN; PTREXP(x_site); NDBG(get_nodeno(x_site), u));
-        IFDBG(D_DETECT, FN;
-              COPY_AND_FREE_GOUT(dbg_node_set(x_site->global_node_set)));
-        IFDBG(D_DETECT, FN;
-              COPY_AND_FREE_GOUT(dbg_node_set(x_site->local_node_set)));
         check_global_node_set(x_site, &ep->notify);
         update_global_count(x_site);
-        IFDBG(D_DETECT, FN; NDBG(iamtheleader(x_site), d);
-              NDBG(enough_live_nodes(x_site), d););
         /* Send xcom message if node has changed state */
-        IFDBG(D_DETECT, FN; NDBG(ep->notify, d));
         if (ep->notify && iamtheleader(x_site) && enough_live_nodes(x_site)) {
           const site_def *current_site_def = get_site_def();
           if (current_site_def) {
@@ -332,14 +429,8 @@ int detector_task(task_arg arg [[maybe_unused]]) {
       }
 
       if (x_site && get_nodeno(x_site) != VOID_NODE_NO) {
-        IFDBG(D_DETECT, FN; PTREXP(x_site); NDBG(get_nodeno(x_site), u));
-        IFDBG(D_DETECT, FN;
-              COPY_AND_FREE_GOUT(dbg_node_set(x_site->global_node_set)));
-        IFDBG(D_DETECT, FN;
-              COPY_AND_FREE_GOUT(dbg_node_set(x_site->local_node_set)));
         update_global_count(x_site);
         check_local_node_set(x_site, &ep->local_notify);
-        IFDBG(D_DETECT, FN; NDBG(ep->local_notify, d));
         if (ep->local_notify) {
           ep->local_notify = 0;
           deliver_view_msg(x_site); /* To application */
@@ -350,7 +441,6 @@ int detector_task(task_arg arg [[maybe_unused]]) {
   }
 
   FINALLY
-  IFDBG(D_BUG, FN; STRLIT(" shutdown "));
   TASK_END;
 }
 
@@ -364,7 +454,7 @@ node_set detector_node_set(site_def const *site) {
     {
       u_int i = 0;
       for (i = 0; i < nodes; i++) {
-        new_set.node_set_val[i] = DETECT(site, i);
+        new_set.node_set_val[i] = detect_node_timeout(site, i);
       }
     }
   }
@@ -374,10 +464,9 @@ node_set detector_node_set(site_def const *site) {
 static void send_my_view(site_def const *site) {
   app_data_ptr a = new_app_data();
   pax_msg *msg = pax_msg_new(null_synode, site);
-  IFDBG(D_DETECT, FN;);
   a->body.c_t = view_msg;
   a->body.app_u_u.present = detector_node_set(site);
-  a->app_key = site->start;
+  G_INFO("send_my_view calls xcom_send");
   xcom_send(a, msg);
 }
 
@@ -404,11 +493,6 @@ static void validate_update_configuration(site_def const *site,
     site_rw->nodeno = xcom_find_node_index(&site_rw->nodes);
   }
 }
-
-/* Send alive messages periodically */
-#ifdef TASK_EVENT_TRACE
-static unsigned int dump = 0;
-#endif
 
 int alive_task(task_arg arg [[maybe_unused]]) {
   DECL_ENV
@@ -446,33 +530,39 @@ int alive_task(task_arg arg [[maybe_unused]]) {
         {
           node_no i;
           for (i = 0; i < get_maxnodes(site); i++) {
-            if (i != get_nodeno(site) && may_be_dead(site->detected, i, sec)) {
-              replace_pax_msg(&ep->you_p, pax_msg_new(alive_synode, site));
-              ep->you_p->op = are_you_alive_op;
+            if (i != get_nodeno(site)) {
+              int silent = DEFAULT_SILENT;
+              double diff =
+                task_now() - site->servers[i]->large_transfer_detected;
+              if (diff < DEFAULT_SILENT) {
+                silent = MAX_SILENT;
+              }
+              if (may_be_dead(site->detected, i, sec, silent,
+                              site->servers[i]->unreachable)) {
+                replace_pax_msg(&ep->you_p, pax_msg_new(alive_synode, site));
+                ep->you_p->op = are_you_alive_op;
 
-              ep->you_p->a = new_app_data();
-              ep->you_p->a->app_key.group_id = ep->you_p->a->group_id =
+                ep->you_p->a = new_app_data();
+                ep->you_p->a->app_key.group_id = ep->you_p->a->group_id =
                   get_group_id(site);
-              ep->you_p->a->body.c_t = xcom_boot_type;
-              init_node_list(1, &site->nodes.node_list_val[i],
-                             &ep->you_p->a->body.app_u_u.nodes);
+                ep->you_p->a->body.c_t = xcom_boot_type;
+                G_INFO(
+                    "alive task set xcom_boot_type for node:%d, get "
+                    "node no:%d",
+                    i, get_nodeno(site));
+                init_node_list(1, &site->nodes.node_list_val[i],
+                    &ep->you_p->a->body.app_u_u.nodes);
 
-              IFDBG(D_DETECT, FN; COPY_AND_FREE_GOUT(
-                        dbg_list(&ep->you_p->a->body.app_u_u.nodes)););
-
-              send_server_msg(site, i, ep->you_p);
+                send_server_msg(site, i, ep->you_p);
+              }
             }
           }
         }
       }
     }
     TASK_DELAY(1.0);
-#ifdef TASK_EVENT_TRACE
-    if (dump++ % 10 == 0) dump_task_events();
-#endif
   }
   FINALLY
-  IFDBG(D_BUG, FN; STRLIT(" shutdown "));
   replace_pax_msg(&ep->i_p, nullptr);
   replace_pax_msg(&ep->you_p, nullptr);
   TASK_END;

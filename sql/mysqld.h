@@ -326,7 +326,7 @@ extern bool opt_replica_allow_batching;
 extern ulong slave_trans_retries;
 extern uint replica_net_timeout;
 extern ulong opt_mts_replica_parallel_workers;
-extern ulonglong opt_mts_pending_jobs_size_max;
+extern ulong opt_mts_replica_worker_queue_len_max;
 extern ulong rpl_stop_replica_timeout;
 extern bool log_bin_use_v1_row_events;
 extern ulong what_to_log, flush_time;

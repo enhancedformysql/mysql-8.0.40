@@ -21,8 +21,6 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include "xcom/task_debug.h"
-
 #ifndef XCOM_WITHOUT_OPENSSL
 #ifdef _WIN32
 /* In OpenSSL before 1.1.0, we need this first. */
@@ -33,6 +31,7 @@
 #include <openssl/ssl.h>
 #endif /*! XCOM_WITHOUT_OPENSSL*/
 
+#include "xcom/task_debug.h"
 #include "xcom/network/network_provider_manager.h"
 
 #include "my_compiler.h"
@@ -135,10 +134,14 @@ Network_provider_manager::get_incoming_connections_provider() {
 bool Network_provider_manager::start_active_network_provider() {
   auto net_provider = this->get_active_provider();
 
-  if (!net_provider) return true;
+  if (!net_provider) {
+    G_INFO("net_provider is nill");
+    return true;
+  }
 
   set_incoming_connections_protocol(get_running_protocol());
 
+  G_INFO("start_active_network_provider calls configure");
   bool config_ok = net_provider->configure(m_active_provider_configuration);
 
   m_ssl_data_context_cleaner =

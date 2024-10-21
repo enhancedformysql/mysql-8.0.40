@@ -25,7 +25,6 @@
 #define TASK_OS_H
 
 #include "xcom/result.h"
-#include "xcom/task_debug.h"
 
 #ifdef _WIN32
 
@@ -162,7 +161,6 @@ static inline int xcom_getpeername(int s, struct sockaddr *name,
 static inline result xcom_close_socket(int *sock) {
   result res = {0, 0};
   if (*sock != -1) {
-    IFDBG(D_FILEOP, FN; STRLIT("closing socket "); NDBG(*sock, d));
     do {
       SET_OS_ERR(0);
       res.val = CLOSESOCKET(*sock);

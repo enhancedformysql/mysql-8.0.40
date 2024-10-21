@@ -333,7 +333,7 @@ class circular_buffer_queue {
 
   /* index is within the valid range */
   bool in(size_t i) {
-    return (avail >= capacity) ? (entry <= i || i < avail - capacity)
+    return (avail >= capacity) ? (entry <= i || i < (avail - capacity))
                                : (entry <= i && i < avail);
   }
   size_t get_length() const { return len.load(std::memory_order_relaxed); }
@@ -380,7 +380,7 @@ class Slave_committed_queue : public circular_buffer_queue<Slave_job_group> {
 #endif
 
   /* Checkpoint routine refreshes the queue */
-  size_t move_queue_head(Slave_worker_array *ws);
+  ulong move_queue_head(Slave_worker_array *ws, uint checkpoint_group, uint *total);
   /* Method is for slave shutdown time cleanup */
   void free_dynamic_items();
   /*
@@ -397,8 +397,9 @@ class Slave_committed_queue : public circular_buffer_queue<Slave_job_group> {
      and returns it.
   */
   size_t en_queue(Slave_job_group *item) {
-    return assigned_group_index =
-               circular_buffer_queue<Slave_job_group>::en_queue(item);
+    assigned_group_index =
+      circular_buffer_queue<Slave_job_group>::en_queue(item);
+    return assigned_group_index;
   }
 
   /**
@@ -421,7 +422,7 @@ class Slave_committed_queue : public circular_buffer_queue<Slave_job_group> {
     return circular_buffer_queue<Slave_job_group>::de_tail(item);
   }
 
-  size_t find_lwm(Slave_job_group **, size_t);
+  size_t find_lwm(Slave_job_group **, size_t, int *);
 };
 
 /**
@@ -576,6 +577,10 @@ class Slave_worker : public Relay_log_info {
     When WQ length is dropped below overrun the counter is reset.
   */
   ulong excess_cnt;
+
+  longlong last_commmitted_seq;
+  bool is_wait_last_commited;
+
   /*
     Coordinates of the last CheckPoint (CP) this Worker has
     acknowledged; part of is persistent data
@@ -593,10 +598,9 @@ class Slave_worker : public Relay_log_info {
   enum en_running_state {
     NOT_RUNNING = 0,
     RUNNING = 1,
-    ERROR_LEAVING = 2,  // is set by Worker
-    STOP = 3,           // is set by Coordinator upon receiving STOP
-    STOP_ACCEPTED =
-        4  // is set by worker upon completing job when STOP SLAVE is issued
+    ERROR_LEAVING = 2, // is set by Worker
+    STOP = 3,          // is set by Coordinator upon receiving STOP
+    STOP_ACCEPTED = 4  // is set by worker upon completing job when STOP SLAVE is issued
   };
 
   /*
@@ -797,7 +801,10 @@ class Slave_worker : public Relay_log_info {
     return 0;
   }
 
-  inline void reset_gaq_index() { gaq_index = c_rli->gaq->capacity; }
+  inline void reset_gaq_index() {
+    gaq_index = c_rli->gaq->capacity;
+  }
+
   inline void set_gaq_index(ulong val) {
     if (gaq_index == c_rli->gaq->capacity) gaq_index = val;
   }

@@ -47,7 +47,7 @@ INSERT INTO aliases(name) VALUES
 ('slave_parallel_workers'), ('slave_pending_jobs_size_max'),
 ('pseudo_slave_mode'), ('skip_slave_start');
 
-include/assert.inc [Expect 114 variables in the table.]
+include/assert.inc [Expect 113 variables in the table.]
 
 # Test SET PERSIST_ONLY
 SET PERSIST_ONLY binlog_cache_size = @@GLOBAL.binlog_cache_size;
@@ -169,12 +169,12 @@ Warnings:
 Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 Warning	1287	'@@replica_parallel_type' is deprecated and will be removed in a future release.
 SET PERSIST_ONLY replica_parallel_workers = @@GLOBAL.replica_parallel_workers;
-SET PERSIST_ONLY replica_pending_jobs_size_max = @@GLOBAL.replica_pending_jobs_size_max;
 SET PERSIST_ONLY replica_preserve_commit_order = @@GLOBAL.replica_preserve_commit_order;
 SET PERSIST_ONLY replica_skip_errors = @@GLOBAL.replica_skip_errors;
 SET PERSIST_ONLY replica_sql_verify_checksum = @@GLOBAL.replica_sql_verify_checksum;
 SET PERSIST_ONLY replica_transaction_retries = @@GLOBAL.replica_transaction_retries;
 SET PERSIST_ONLY replica_type_conversions = @@GLOBAL.replica_type_conversions;
+SET PERSIST_ONLY replica_worker_queue_len_max = @@GLOBAL.replica_worker_queue_len_max;
 SET PERSIST_ONLY replication_optimize_for_static_plugin_config = @@GLOBAL.replication_optimize_for_static_plugin_config;
 SET PERSIST_ONLY replication_sender_observe_commit_only = @@GLOBAL.replication_sender_observe_commit_only;
 SET PERSIST_ONLY rpl_read_size = @@GLOBAL.rpl_read_size;
@@ -235,10 +235,6 @@ SET PERSIST_ONLY slave_parallel_workers = @@GLOBAL.slave_parallel_workers;
 Warnings:
 Warning	1287	'@@slave_parallel_workers' is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
 Warning	1287	'@@slave_parallel_workers' is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
-SET PERSIST_ONLY slave_pending_jobs_size_max = @@GLOBAL.slave_pending_jobs_size_max;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
 SET PERSIST_ONLY slave_preserve_commit_order = @@GLOBAL.slave_preserve_commit_order;
 Warnings:
 Warning	1287	'@@slave_preserve_commit_order' is deprecated and will be removed in a future release. Please use replica_preserve_commit_order instead.
@@ -281,16 +277,16 @@ Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a futu
 Warning	1287	'@@sync_relay_log_info' is deprecated and will be removed in a future release.
 SET PERSIST_ONLY sync_source_info = @@GLOBAL.sync_source_info;
 
-include/assert.inc [Expect 101 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 100 persisted variables in persisted_variables table.]
 
 ############################################################
 # 2. Restart server, it must preserve the persisted variable
 #    settings. Verify persisted configuration.
 # restart
 
-include/assert.inc [Expect 101 persisted variables in persisted_variables table.]
-include/assert.inc [Expect 101 persisted variables shown as PERSISTED in variables_info table.]
-include/assert.inc [Expect 101 persisted variables with matching persisted and global values.]
+include/assert.inc [Expect 100 persisted variables in persisted_variables table.]
+include/assert.inc [Expect 100 persisted variables shown as PERSISTED in variables_info table.]
+include/assert.inc [Expect 100 persisted variables with matching persisted and global values.]
 
 ############################################################
 # 3. Test RESET PERSIST. Verify persisted variable settings
@@ -370,12 +366,12 @@ RESET PERSIST replica_max_allowed_packet;
 RESET PERSIST replica_net_timeout;
 RESET PERSIST replica_parallel_type;
 RESET PERSIST replica_parallel_workers;
-RESET PERSIST replica_pending_jobs_size_max;
 RESET PERSIST replica_preserve_commit_order;
 RESET PERSIST replica_skip_errors;
 RESET PERSIST replica_sql_verify_checksum;
 RESET PERSIST replica_transaction_retries;
 RESET PERSIST replica_type_conversions;
+RESET PERSIST replica_worker_queue_len_max;
 RESET PERSIST replication_optimize_for_static_plugin_config;
 RESET PERSIST replication_sender_observe_commit_only;
 RESET PERSIST rpl_read_size;

@@ -1680,6 +1680,8 @@ class Gtid_set {
     return (is_subset(super) && !equals(super));
   }
 
+  bool is_equals(const Gtid_set *super) const { return equals(super); }
+
   /**
     Returns true if this Gtid_set is a subset of the given gtid_set
     on the given superset_sidno and subset_sidno.

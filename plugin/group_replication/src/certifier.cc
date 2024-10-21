@@ -27,6 +27,7 @@
 #include <map>
 
 #include <mysql/components/services/log_builtins.h>
+#include "base64.h"
 #include "my_dbug.h"
 #include "my_systime.h"
 #include "plugin/group_replication/include/certifier.h"
@@ -144,17 +145,13 @@ void Certifier_broadcast_thread::dispatcher() {
   mysql_mutex_unlock(&broadcast_run_lock);
 
   while (!aborted) {
-    // Broadcast Transaction identifiers every 30 seconds
-    if (broadcast_counter % 30 == 0) {
+    // Broadcast Transaction identifiers every 10 seconds
+    if (broadcast_counter % 10 == 0) {
       applier_module->get_pipeline_stats_member_collector()
           ->set_send_transaction_identifiers();
-      if (applier_module->is_applier_thread_waiting()) {
-        applier_module->get_pipeline_stats_member_collector()
-            ->clear_transactions_waiting_apply();
-      }
     }
 
-    applier_module->run_flow_control_step();
+    applier_module->run_flow_stat_step();
 
     if (broadcast_counter % broadcast_gtid_executed_period == 0) {
       broadcast_gtid_executed();
@@ -169,11 +166,10 @@ void Certifier_broadcast_thread::dispatcher() {
       cert_module->stable_set_handle();
     }
 
-    mysql_mutex_lock(&broadcast_dispatcher_lock);
     if (aborted) {
-      mysql_mutex_unlock(&broadcast_dispatcher_lock); /* purecov: inspected */
-      break;                                          /* purecov: inspected */
+      break;     
     }
+    mysql_mutex_lock(&broadcast_dispatcher_lock);
     struct timespec abstime;
     set_timespec(&abstime, 1);
     mysql_cond_timedwait(&broadcast_dispatcher_cond, &broadcast_dispatcher_lock,
@@ -251,29 +247,15 @@ int Certifier_broadcast_thread::broadcast_gtid_executed() {
 
 Certifier::Certifier()
     : initialized(false),
-      certification_info(
-          Malloc_allocator<std::pair<const std::string, Gtid_set_ref *>>(
-              key_certification_info)),
-      positive_cert(0),
-      negative_cert(0),
+      base_parallel_applier_sequence_number(0),
       parallel_applier_last_committed_global(1),
       parallel_applier_last_sequence_number(1),
       parallel_applier_sequence_number(2),
       certifying_already_applied_transactions(false),
       gtid_assignment_block_size(1),
-      gtids_assigned_in_blocks_counter(1),
-      conflict_detection_enable(!local_member_info->in_primary_mode()) {
-  last_conflict_free_transaction.clear();
+      gtids_assigned_in_blocks_counter(1) {
 
 #if !defined(NDEBUG)
-  certifier_garbage_collection_block = false;
-  /*
-    Debug flag to block the garbage collection and discard incoming stable
-    set messages while garbage collection is on going.
-  */
-  DBUG_EXECUTE_IF("certifier_garbage_collection_block",
-                  certifier_garbage_collection_block = true;);
-
   same_member_message_discarded = false;
   /*
     Debug flag to check for similar member sending multiple messages.
@@ -282,7 +264,6 @@ Certifier::Certifier()
                   same_member_message_discarded = true;);
 #endif
 
-  certification_info_sid_map = new Sid_map(nullptr);
   incoming = new Synchronized_queue<Data_packet *>(key_certification_data_gc);
 
   stable_gtid_set_lock = new Checkable_rwlock(
@@ -298,6 +279,8 @@ Certifier::Certifier()
   group_gtid_executed = new Gtid_set(group_gtid_sid_map, nullptr);
   group_gtid_extracted = new Gtid_set(group_gtid_sid_map, nullptr);
 
+  last_local_gtid.clear();
+
   mysql_mutex_init(key_GR_LOCK_certification_info, &LOCK_certification_info,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_GR_LOCK_cert_members, &LOCK_members, MY_MUTEX_INIT_FAST);
@@ -306,8 +289,6 @@ Certifier::Certifier()
 Certifier::~Certifier() {
   mysql_mutex_lock(&LOCK_certification_info);
   initialized = false;
-  clear_certification_info();
-  delete certification_info_sid_map;
 
   delete stable_gtid_set;
   delete stable_sid_map;
@@ -554,10 +535,14 @@ Gtid_set::Interval Certifier::reserve_gtid_block(longlong block_size) {
 }
 
 void Certifier::add_to_group_gtid_executed_internal(rpl_sidno sidno,
-                                                    rpl_gno gno) {
+                                                    rpl_gno gno, bool local) {
   DBUG_TRACE;
   mysql_mutex_assert_owner(&LOCK_certification_info);
   group_gtid_executed->_add_gtid(sidno, gno);
+  if (local) {
+    assert(sidno > 0 && gno > 0);
+    last_local_gtid.set(sidno, gno);
+  }
   /*
     We only need to track certified transactions on
     group_gtid_extracted while:
@@ -570,25 +555,6 @@ void Certifier::add_to_group_gtid_executed_internal(rpl_sidno sidno,
       (sidno == group_gtid_sid_map_group_sidno ||
        sidno == views_sidno_group_representation))
     group_gtid_extracted->_add_gtid(sidno, gno);
-}
-
-void Certifier::clear_certification_info() {
-  mysql_mutex_assert_owner(&LOCK_certification_info);
-  for (Certification_info::iterator it = certification_info.begin();
-       it != certification_info.end(); ++it) {
-    // We can only delete the last reference.
-    if (it->second->unlink() == 0) {
-      /*
-        Claim Gtid_set_ref used memory to
-        `thread/group_rpl/THD_certifier_broadcast` thread, since this is thread
-        that does release the memory.
-      */
-      it->second->claim_memory_ownership(true);
-      delete it->second;
-    }
-  }
-
-  certification_info.clear();
 }
 
 void Certifier::clear_incoming() {
@@ -681,12 +647,83 @@ void Certifier::update_parallel_applier_indexes(
          parallel_applier_last_sequence_number);
 }
 
+bool Certifier::add_item(const char *item,
+    int64 transaction_sequence_number,
+    int64 *item_previous_sequence_number) {
+  DBUG_TRACE;
+  mysql_mutex_assert_owner(&LOCK_certification_info);
+  bool found = false;
+  int error = false;
+  size_t base_len = strlen(item);
+  size_t decoded_len = base64_needed_decoded_length(base_len);
+  unsigned char dst[64];
+  size_t dst_len = base64_decode(item, base_len, dst, nullptr, 0);
+  if (dst_len != 8) {
+    LogPluginErrMsg(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+        "len:%lu not expected, expected decoded_len:%lu", dst_len,
+        decoded_len);
+  }
+
+  int index = (((unsigned char)dst[0]) << 8) + (((unsigned char)dst[1]));
+
+  unsigned char *remainder = dst + 2;
+  replay_cal_hash_item *hash_item = &(replayed_cal_array[index]);
+  unsigned char *found_pos = nullptr;
+  int64 relative_sequence =
+    transaction_sequence_number - base_parallel_applier_sequence_number;
+
+  if (relative_sequence > MAX_RELATIVE_SEQUENCE_NUMBER) {
+    return true;
+  }
+
+  if (hash_item->number > 0) {
+    for (int i = 0; i < hash_item->number; i++) {
+      unsigned char *p = hash_item->values + (i << 3);
+      bool is_equal = true;
+      for (int j = 0; j < 6; j++) {
+        if (remainder[j] != p[j]) {
+          is_equal = false;
+          break;
+        }
+      }
+      if (is_equal) {
+        found_pos = p;
+        found = true;
+        break;
+      }
+    }
+  }
+
+  if (found) {
+    int64 old_relative_sequence = (found_pos[6] << 8) + found_pos[7];
+    *item_previous_sequence_number =
+      base_parallel_applier_sequence_number + old_relative_sequence;
+    found_pos[6] = (relative_sequence & 0xFF00) >> 8;
+    found_pos[7] = (relative_sequence & 0x00FF);
+  } else {
+    if (hash_item->number >= REPLAY_CAL_HASH_ITEMS) {
+      error = true;
+    } else {
+      found_pos = hash_item->values + (hash_item->number << 3);
+      hash_item->number++;
+      for (int j = 0; j < 6; j++) {
+        found_pos[j] = remainder[j];
+      }
+      found_pos[6] = (relative_sequence & 0xFF00) >> 8;
+      found_pos[7] = (relative_sequence & 0x00FF);
+    }
+  }
+
+  return error;
+}
+
 rpl_gno Certifier::certify(Gtid_set *snapshot_version,
                            std::list<const char *> *write_set,
                            bool generate_group_id, const char *member_uuid,
                            Gtid_log_event *gle, bool local_transaction) {
   DBUG_TRACE;
   rpl_gno result = 0;
+  bool has_to_flush_last_commited = false;
   const bool has_write_set = !write_set->empty();
 
   if (!is_initialized()) return -1; /* purecov: inspected */
@@ -694,47 +731,9 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
   mysql_mutex_lock(&LOCK_certification_info);
   int64 transaction_last_committed = parallel_applier_last_committed_global;
 
-  DBUG_EXECUTE_IF("certifier_force_1_negative_certification", {
-    DBUG_SET("-d,certifier_force_1_negative_certification");
-    goto end;
-  });
-
-  if (conflict_detection_enable) {
-    for (std::list<const char *>::iterator it = write_set->begin();
-         it != write_set->end(); ++it) {
-      Gtid_set *certified_write_set_snapshot_version =
-          get_certified_write_set_snapshot_version(*it);
-
-      /*
-        If the previous certified transaction snapshot version is not
-        a subset of the incoming transaction snapshot version, the current
-        transaction was executed on top of outdated data, so it will be
-        negatively certified. Otherwise, this transaction is marked
-        certified and goes into applier.
-      */
-      if (certified_write_set_snapshot_version != nullptr &&
-          !certified_write_set_snapshot_version->is_subset(snapshot_version))
-        goto end;
-    }
-  }
-
   if (certifying_already_applied_transactions &&
       !group_gtid_extracted->is_subset_not_equals(group_gtid_executed)) {
     certifying_already_applied_transactions = false;
-
-#ifndef NDEBUG
-    char *group_gtid_executed_string = nullptr;
-    char *group_gtid_extracted_string = nullptr;
-    group_gtid_executed->to_string(&group_gtid_executed_string, true);
-    group_gtid_extracted->to_string(&group_gtid_extracted_string, true);
-    DBUG_PRINT(
-        "Certifier::certify()",
-        ("Set certifying_already_applied_transactions to false. "
-         "group_gtid_executed: \"%s\"; group_gtid_extracted_string: \"%s\"",
-         group_gtid_executed_string, group_gtid_extracted_string));
-    my_free(group_gtid_executed_string);
-    my_free(group_gtid_extracted_string);
-#endif
   }
 
   /*
@@ -777,15 +776,6 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
     */
     snapshot_version->_add_gtid(get_group_sidno(), result);
 
-    /*
-      Store last conflict free transaction identification.
-      sidno must be relative to group_gtid_sid_map.
-    */
-    last_conflict_free_transaction.set(group_gtid_sid_map_group_sidno, result);
-
-    DBUG_PRINT("info", ("Group replication Certifier: generated transaction "
-                        "identifier: %" PRId64,
-                        result));
   } else {
     /*
       Check if it is an already used GTID
@@ -852,22 +842,6 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
     }
     snapshot_version->_add_gtid(sidno, gle->get_gno());
 
-    /*
-      Store last conflict free transaction identification.
-      sidno must be relative to group_gtid_sid_map.
-    */
-    rpl_sidno last_conflict_free_transaction_sidno =
-        gle->get_sidno(group_gtid_sid_map);
-    if (last_conflict_free_transaction_sidno < 1) {
-      LogPluginErr(
-          WARNING_LEVEL,
-          ER_GRP_RPL_UPDATE_LAST_CONFLICT_FREE_TRANS_ERROR); /* purecov:
-                                                                inspected */
-    } else {
-      last_conflict_free_transaction.set(last_conflict_free_transaction_sidno,
-                                         gle->get_gno());
-    }
-
     result = 1;
     DBUG_PRINT(
         "info",
@@ -879,47 +853,37 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
     Add the transaction's write set to certification info.
   */
   if (has_write_set) {
-    // Only consider remote transactions for parallel applier indexes.
-    int64 transaction_sequence_number =
+    if (!local_transaction) {
+      // Only consider remote transactions for parallel applier indexes.
+      int64 transaction_sequence_number =
         local_transaction ? -1 : parallel_applier_sequence_number;
-    Gtid_set_ref *snapshot_version_value = new Gtid_set_ref(
-        certification_info_sid_map, transaction_sequence_number);
-    if (snapshot_version_value->add_gtid_set(snapshot_version) !=
-        RETURN_STATUS_OK) {
-      result = 0;                    /* purecov: inspected */
-      delete snapshot_version_value; /* purecov: inspected */
-      LogPluginErr(
-          ERROR_LEVEL,
-          ER_GRP_RPL_UPDATE_TRANS_SNAPSHOT_REF_VER_ERROR); /* purecov: inspected
-                                                            */
-      goto end; /* purecov: inspected */
+
+      for (std::list<const char *>::iterator it = write_set->begin();
+          it != write_set->end(); ++it) {
+        int64 item_previous_sequence_number = -1;
+
+        bool error = add_item(*it, transaction_sequence_number,
+            &item_previous_sequence_number);
+        if (error) {
+          clear_replay_cal_info();
+          transaction_last_committed = transaction_sequence_number - 1;
+          has_to_flush_last_commited = 1;
+          base_parallel_applier_sequence_number = transaction_sequence_number;
+          break;
+        }
+
+        /*
+           Exclude previous sequence number that are smaller than global
+           last committed and that are the current sequence number.
+           transaction_last_committed is initialized with
+           parallel_applier_last_committed_global on the beginning of
+           this method.
+         */
+        if (item_previous_sequence_number > transaction_last_committed &&
+            item_previous_sequence_number != parallel_applier_sequence_number)
+          transaction_last_committed = item_previous_sequence_number;
+      }
     }
-
-    for (std::list<const char *>::iterator it = write_set->begin();
-         it != write_set->end(); ++it) {
-      int64 item_previous_sequence_number = -1;
-
-      add_item(*it, snapshot_version_value, &item_previous_sequence_number);
-
-      /*
-        Exclude previous sequence number that are smaller than global
-        last committed and that are the current sequence number.
-        transaction_last_committed is initialized with
-        parallel_applier_last_committed_global on the beginning of
-        this method.
-      */
-      if (item_previous_sequence_number > transaction_last_committed &&
-          item_previous_sequence_number != parallel_applier_sequence_number)
-        transaction_last_committed = item_previous_sequence_number;
-    }
-    /*
-      The memory used by Gtid_set_ref is allocated by
-      `thread/group_rpl/THD_applier_module_receiver`, though it will be released
-      by `thread/group_rpl/THD_certifier_broadcast` thread.  To avoid untracked
-      memory release on `thread/group_rpl/THD_applier_module_receiver` we do
-      dissociate this used memory from this thread.
-    */
-    snapshot_version_value->claim_memory_ownership(false);
   }
 
   /*
@@ -936,29 +900,36 @@ rpl_gno Certifier::certify(Gtid_set *snapshot_version,
     bool update_parallel_applier_last_committed_global = false;
     if (0 == gle->last_committed && 0 == gle->sequence_number) {
       update_parallel_applier_last_committed_global = true;
+    } else if (has_to_flush_last_commited) {
+      update_parallel_applier_last_committed_global = true;
     }
 
-    if (!has_write_set || update_parallel_applier_last_committed_global) {
+    bool need_inc_parallel_applier_sequence_number = false;
+    if ((!has_write_set) || update_parallel_applier_last_committed_global) {
       /*
         DDL does not have write-set, so we need to ensure that it
         is applied without any other transaction in parallel.
       */
       transaction_last_committed = parallel_applier_sequence_number - 1;
+      need_inc_parallel_applier_sequence_number = true;
     }
 
     gle->last_committed = transaction_last_committed;
     gle->sequence_number = parallel_applier_sequence_number;
     assert(gle->last_committed >= 0);
     assert(gle->sequence_number > 0);
+    if (gle->last_committed >= gle->sequence_number) {
+      LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+          "gle->last_committed:%lld, gle->sequence_number:%lld",
+          gle->last_committed, gle->sequence_number);
+      result = 1;
+    }
     assert(gle->last_committed < gle->sequence_number);
 
-    update_parallel_applier_indexes(
-        !has_write_set || update_parallel_applier_last_committed_global, true);
+    update_parallel_applier_indexes(need_inc_parallel_applier_sequence_number, true);
   }
 
 end:
-  update_certified_transaction_count(result > 0, local_transaction);
-
   mysql_mutex_unlock(&LOCK_certification_info);
   DBUG_PRINT(
       "info",
@@ -966,7 +937,8 @@ end:
   return result;
 }
 
-int Certifier::add_specified_gtid_to_group_gtid_executed(Gtid_log_event *gle) {
+int Certifier::add_specified_gtid_to_group_gtid_executed(Gtid_log_event *gle,
+                                                         bool local) {
   DBUG_TRACE;
 
   if (!is_initialized()) {
@@ -990,13 +962,13 @@ int Certifier::add_specified_gtid_to_group_gtid_executed(Gtid_log_event *gle) {
     return 1;                                       /* purecov: inspected */
   }
 
-  add_to_group_gtid_executed_internal(sidno, gle->get_gno());
+  add_to_group_gtid_executed_internal(sidno, gle->get_gno(), local);
 
   mysql_mutex_unlock(&LOCK_certification_info);
   return 0;
 }
 
-int Certifier::add_group_gtid_to_group_gtid_executed(rpl_gno gno) {
+int Certifier::add_group_gtid_to_group_gtid_executed(rpl_gno gno, bool local) {
   DBUG_TRACE;
 
   if (!is_initialized()) {
@@ -1004,7 +976,7 @@ int Certifier::add_group_gtid_to_group_gtid_executed(rpl_gno gno) {
   }
 
   mysql_mutex_lock(&LOCK_certification_info);
-  add_to_group_gtid_executed_internal(group_gtid_sid_map_group_sidno, gno);
+  add_to_group_gtid_executed_internal(group_gtid_sid_map_group_sidno, gno, local);
   mysql_mutex_unlock(&LOCK_certification_info);
   return 0;
 }
@@ -1152,66 +1124,14 @@ rpl_gno Certifier::get_next_available_gtid_candidate(rpl_sidno sidno,
   }
 }
 
-bool Certifier::add_item(const char *item, Gtid_set_ref *snapshot_version,
-                         int64 *item_previous_sequence_number) {
+void Certifier::clear_replay_cal_info() {
   DBUG_TRACE;
   mysql_mutex_assert_owner(&LOCK_certification_info);
-  bool error = true;
-  std::string key(item);
-  Certification_info::iterator it = certification_info.find(key);
-  snapshot_version->link();
 
-  if (it == certification_info.end()) {
-    std::pair<Certification_info::iterator, bool> ret =
-        certification_info.insert(
-            std::pair<std::string, Gtid_set_ref *>(key, snapshot_version));
-    error = !ret.second;
-  } else {
-    *item_previous_sequence_number =
-        it->second->get_parallel_applier_sequence_number();
-
-    if (it->second->unlink() == 0) {
-      /*
-        Claim Gtid_set_ref used memory to
-        `thread/group_rpl/THD_certifier_broadcast` thread, since this is thread
-        that does release the memory.
-      */
-      it->second->claim_memory_ownership(true);
-      delete it->second;
-    }
-
-    it->second = snapshot_version;
-    error = false;
+  for (int i = 0; i < REPLAY_CAL_ARRAY; i++) {
+    replay_cal_hash_item *hash_item = &(replayed_cal_array[i]);
+    hash_item->number = 0;
   }
-
-  DBUG_EXECUTE_IF("group_replication_certifier_after_add_item", {
-    const char act[] =
-        "now signal "
-        "signal.group_replication_certifier_after_add_item_reached "
-        "wait_for "
-        "signal.group_replication_certifier_after_add_item_continue";
-    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
-  });
-
-  return error;
-}
-
-Gtid_set *Certifier::get_certified_write_set_snapshot_version(
-    const char *item) {
-  DBUG_TRACE;
-  mysql_mutex_assert_owner(&LOCK_certification_info);
-
-  if (!is_initialized()) return nullptr; /* purecov: inspected */
-
-  Certification_info::iterator it;
-  std::string item_str(item);
-
-  it = certification_info.find(item_str);
-
-  if (it == certification_info.end())
-    return nullptr;
-  else
-    return it->second;
 }
 
 int Certifier::get_group_stable_transactions_set_string(char **buffer,
@@ -1265,101 +1185,7 @@ bool Certifier::set_group_stable_transactions_set(Gtid_set *executed_gtid_set) {
   }
   stable_gtid_set_lock->unlock();
 
-  garbage_collect();
-
   return false;
-}
-
-void Certifier::garbage_collect() {
-  DBUG_TRACE;
-
-  if (!is_initialized()) {
-    return;
-  }
-
-  /*
-    This debug option works together with
-    `group_replication_certifier_broadcast_thread_big_period`
-    by disabling the manual garbage collection that happens when
-    a View_log_change_event is logged.
-    Applier_module::apply_view_change_packet() does call
-    Certifier::set_group_stable_transactions_set().
-  */
-  DBUG_EXECUTE_IF("group_replication_do_not_clear_certification_database",
-                  { return; };);
-
-  mysql_mutex_lock(&LOCK_certification_info);
-
-  /*
-    When a transaction "t" is applied to all group members and for all
-    ongoing, i.e., not yet committed or aborted transactions,
-    "t" was already committed when they executed (thus "t"
-    precedes them), then "t" is stable and can be removed from
-    the certification info.
-  */
-  Certification_info::iterator it = certification_info.begin();
-  stable_gtid_set_lock->wrlock();
-  while (it != certification_info.end()) {
-    if (it->second->is_subset_not_equals(stable_gtid_set)) {
-      if (it->second->unlink() == 0) {
-        /*
-          Claim Gtid_set_ref used memory to
-          `thread/group_rpl/THD_certifier_broadcast` thread, since this is
-          thread that does release the memory.
-        */
-        it->second->claim_memory_ownership(true);
-        delete it->second;
-      }
-      certification_info.erase(it++);
-    } else
-      ++it;
-  }
-  stable_gtid_set_lock->unlock();
-
-  /*
-    We need to update parallel applier indexes since we do not know
-    what write sets were purged, which may cause transactions
-    last committed to be incorrectly computed.
-  */
-  update_parallel_applier_indexes(true, false);
-
-#if !defined(NDEBUG)
-  /*
-    This part blocks the garbage collection process for 300 sec in order to
-    simulate the case that while garbage collection is going on, we should
-    skip the stable set messages round in order to prevent simultaneous
-    access to stable_gtid_set.
-  */
-  if (certifier_garbage_collection_block) {
-    certifier_garbage_collection_block = false;
-    // my_sleep expects a given number of microseconds.
-    my_sleep(broadcast_thread->BROADCAST_GTID_EXECUTED_PERIOD * 1500000);
-  }
-
-  DBUG_EXECUTE_IF("group_replication_certifier_garbage_collection_ran", {
-    const char act[] =
-        "now signal "
-        "signal.group_replication_certifier_garbage_collection_finished";
-    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
-  });
-#endif
-
-  mysql_mutex_unlock(&LOCK_certification_info);
-
-  /*
-    Applier channel received set does only contain the GTIDs of the
-    remote (committed by other members) transactions. On the long
-    term, the gaps may create performance issues on the received
-    set update. To avoid that, periodically, we update the received
-    set with the full set of transactions committed on the group,
-    closing the gaps.
-  */
-  if (channel_add_executed_gtids_to_received_gtids(
-          applier_module_channel_name)) {
-    LogPluginErr(
-        WARNING_LEVEL,
-        ER_GRP_RPL_RECEIVED_SET_MISSING_GTIDS); /* purecov: inspected */
-  }
 }
 
 int Certifier::handle_certifier_data(
@@ -1369,19 +1195,6 @@ int Certifier::handle_certifier_data(
 
   if (!is_initialized()) return 1; /* purecov: inspected */
 
-  /*
-    On members recovering through clone the GTID_EXECUTED is only
-    updated after the server restart that finishes the procedure.
-    During that procedure they will periodically send the GTID_EXECUTED
-    that the server had once joined the group. This will restrain the
-    common set of transactions applied on all members, which in consequence
-    will render the certification garbage collection void.
-    As such, we only consider ONLINE members for the common set of
-    transactions applied on all members.
-    When recovering members change to ONLINE state, their certification
-    info will be updated with the one of the donor at the join, being
-    garbage collect on the future calls of this method.
-  */
   if (group_member_mgr->get_group_member_status_by_member_id(gcs_member_id) !=
       Group_member_info::MEMBER_ONLINE) {
     return 0;
@@ -1552,16 +1365,8 @@ int Certifier::stable_set_handle() {
   my_free(executed_set_string);
 #endif
 
-  /*
-    Clearing the members to proceed with the next round of garbage
-    collection.
-  */
   clear_members();
   mysql_mutex_unlock(&LOCK_members);
-
-  if (!error) {
-    garbage_collect();
-  }
 
   return error;
 }
@@ -1588,20 +1393,6 @@ void Certifier::get_certification_info(
   }
 
   mysql_mutex_lock(&LOCK_certification_info);
-
-  for (Certification_info::iterator it = certification_info.begin();
-       it != certification_info.end(); ++it) {
-    std::string key = it->first;
-    assert(key.compare(GTID_EXTRACTED_NAME) != 0);
-
-    size_t len = it->second->get_encoded_length();
-    uchar *buf = (uchar *)my_malloc(key_certification_data, len, MYF(0));
-    it->second->encode(buf);
-    std::string value(reinterpret_cast<const char *>(buf), len);
-    my_free(buf);
-
-    (*cert_info).insert(std::pair<std::string, std::string>(key, value));
-  }
 
   // Add the group_gtid_executed to certification info sent to joiners.
   size_t len = group_gtid_executed->get_encoded_length();
@@ -1631,7 +1422,7 @@ Gtid Certifier::generate_view_change_group_gtid() {
 
   if (result > 0)
     add_to_group_gtid_executed_internal(views_sidno_group_representation,
-                                        result);
+                                        result, false);
   mysql_mutex_unlock(&LOCK_certification_info);
 
   return {views_sidno_server_representation, result};
@@ -1659,7 +1450,6 @@ int Certifier::set_certification_info(
 
   mysql_mutex_lock(&LOCK_certification_info);
 
-  clear_certification_info();
   for (std::map<std::string, std::string>::iterator it = cert_info->begin();
        it != cert_info->end(); ++it) {
     std::string key = it->first;
@@ -1681,27 +1471,6 @@ int Certifier::set_certification_info(
       }
       continue;
     }
-
-    Gtid_set_ref *value = new Gtid_set_ref(certification_info_sid_map, -1);
-    if (value->add_gtid_encoding(
-            reinterpret_cast<const uchar *>(it->second.c_str()),
-            it->second.length()) != RETURN_STATUS_OK) {
-      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_CANT_READ_WRITE_SET_ITEM,
-                   key.c_str());                    /* purecov: inspected */
-      mysql_mutex_unlock(&LOCK_certification_info); /* purecov: inspected */
-      return 1;                                     /* purecov: inspected */
-    }
-    value->link();
-    certification_info.insert(
-        std::pair<std::string, Gtid_set_ref *>(key, value));
-    /*
-      The memory used by Gtid_set_ref is allocated by
-      `thread/group_rpl/THD_applier_module_receiver`, though it will be released
-      by `thread/group_rpl/THD_certifier_broadcast` thread.  To avoid untracked
-      memory release on `thread/group_rpl/THD_applier_module_receiver` we do
-      dissociate this used memory from this thread.
-    */
-    value->claim_memory_ownership(false);
   }
 
   if (initialize_server_gtid_set()) {
@@ -1716,130 +1485,22 @@ int Certifier::set_certification_info(
     certifying_already_applied_transactions = true;
     compute_group_available_gtid_intervals();
 
-#ifndef NDEBUG
-    char *group_gtid_executed_string = nullptr;
-    char *group_gtid_extracted_string = nullptr;
-    group_gtid_executed->to_string(&group_gtid_executed_string, true);
-    group_gtid_extracted->to_string(&group_gtid_extracted_string, true);
-    DBUG_PRINT(
-        "Certifier::set_certification_info()",
-        ("Set certifying_already_applied_transactions to true. "
-         "group_gtid_executed: \"%s\"; group_gtid_extracted_string: \"%s\"",
-         group_gtid_executed_string, group_gtid_extracted_string));
-    my_free(group_gtid_executed_string);
-    my_free(group_gtid_extracted_string);
-#endif
   }
 
   mysql_mutex_unlock(&LOCK_certification_info);
   return 0;
 }
 
-void Certifier::update_certified_transaction_count(bool result,
-                                                   bool local_transaction) {
-  mysql_mutex_assert_owner(&LOCK_certification_info);
+size_t Certifier::get_local_certified_gtid(
+    std::string &local_gtid_certified_string) {
+  if (last_local_gtid.is_empty()) return 0;
 
-  if (result)
-    positive_cert++;
-  else
-    negative_cert++;
-
-  const Group_member_info::Group_member_status member_status =
-      local_member_info->get_recovery_status();
-  assert(member_status == Group_member_info::MEMBER_ONLINE ||
-         member_status == Group_member_info::MEMBER_IN_RECOVERY);
-
-  applier_module->get_pipeline_stats_member_collector()
-      ->increment_transactions_certified();
-
-  /*
-    If transaction is local and rolledback
-    increment local negative certifier count
-  */
-  if (local_transaction && !result) {
-    applier_module->get_pipeline_stats_member_collector()
-        ->increment_transactions_local_rollback();
-  }
-
-  if (member_status == Group_member_info::MEMBER_IN_RECOVERY) {
-    applier_module->get_pipeline_stats_member_collector()
-        ->increment_transactions_certified_during_recovery();
-
-    if (!result) {
-      applier_module->get_pipeline_stats_member_collector()
-          ->increment_transactions_certified_negatively_during_recovery();
-    }
-  }
+  char buf[Gtid::MAX_TEXT_LENGTH + 1];
+  last_local_gtid.to_string(group_gtid_sid_map, buf);
+  local_gtid_certified_string.assign(buf);
+  return local_gtid_certified_string.size();
 }
 
-ulonglong Certifier::get_positive_certified() { return positive_cert; }
-
-ulonglong Certifier::get_negative_certified() { return negative_cert; }
-
-ulonglong Certifier::get_certification_info_size() {
-  return certification_info.size();
-}
-
-void Certifier::get_last_conflict_free_transaction(std::string *value) {
-  int length = 0;
-  char buffer[Gtid::MAX_TEXT_LENGTH + 1];
-
-  if (!is_initialized()) {
-    return;
-  }
-
-  mysql_mutex_lock(&LOCK_certification_info);
-  if (last_conflict_free_transaction.is_empty()) goto end;
-
-  length = last_conflict_free_transaction.to_string(group_gtid_sid_map, buffer);
-  if (length > 0) value->assign(buffer);
-
-end:
-  mysql_mutex_unlock(&LOCK_certification_info);
-}
-
-void Certifier::enable_conflict_detection() {
-  DBUG_TRACE;
-
-  if (!is_initialized()) {
-    return;
-  }
-
-  mysql_mutex_lock(&LOCK_certification_info);
-  conflict_detection_enable = true;
-  local_member_info->enable_conflict_detection();
-  mysql_mutex_unlock(&LOCK_certification_info);
-}
-
-void Certifier::disable_conflict_detection() {
-  DBUG_TRACE;
-  assert(local_member_info->in_primary_mode());
-
-  if (!is_initialized()) {
-    return;
-  }
-
-  mysql_mutex_lock(&LOCK_certification_info);
-  conflict_detection_enable = false;
-  local_member_info->disable_conflict_detection();
-  mysql_mutex_unlock(&LOCK_certification_info);
-
-  LogPluginErr(INFORMATION_LEVEL, ER_GRP_RPL_CONFLICT_DETECTION_DISABLED);
-}
-
-bool Certifier::is_conflict_detection_enable() {
-  DBUG_TRACE;
-
-  if (!is_initialized()) {
-    return false;
-  }
-
-  mysql_mutex_lock(&LOCK_certification_info);
-  bool result = conflict_detection_enable;
-  mysql_mutex_unlock(&LOCK_certification_info);
-
-  return result;
-}
 
 /*
   Gtid_Executed_Message implementation

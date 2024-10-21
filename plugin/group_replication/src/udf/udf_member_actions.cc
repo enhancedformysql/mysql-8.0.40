@@ -121,7 +121,7 @@ static char *group_replication_enable_member_action(UDF_INIT *, UDF_ARGS *args,
   }
 
   im_the_primary =
-      member_online_with_majority() && local_member_info->in_primary_mode() &&
+      member_online_with_majority() &&
       local_member_info->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY;
   im_offline = !plugin_is_group_replication_running();
   if (!(im_the_primary || im_offline)) {
@@ -249,7 +249,7 @@ static char *group_replication_disable_member_action(UDF_INIT *, UDF_ARGS *args,
   }
 
   im_the_primary =
-      member_online_with_majority() && local_member_info->in_primary_mode() &&
+      member_online_with_majority() &&
       local_member_info->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY;
   im_offline = !plugin_is_group_replication_running();
   if (!(im_the_primary || im_offline)) {

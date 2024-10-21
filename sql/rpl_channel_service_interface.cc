@@ -879,7 +879,7 @@ int channel_add_executed_gtids_to_received_gtids(const char *channel) {
 }
 
 int channel_queue_packet(const char *channel, const char *buf,
-                         unsigned long event_len) {
+                         unsigned long event_len, bool io_buffered) {
   int result;
   DBUG_TRACE;
 
@@ -890,6 +890,11 @@ int channel_queue_packet(const char *channel, const char *buf,
   if (mi == nullptr) {
     channel_map.unlock();
     return RPL_CHANNEL_SERVICE_CHANNEL_DOES_NOT_EXISTS_ERROR;
+  }
+  if (io_buffered) {
+    mi->io_buffered = 1;
+  } else {
+    mi->io_buffered = 0;
   }
   channel_map.unlock();
 

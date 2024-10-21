@@ -349,6 +349,13 @@ class Relay_log_info : public Rpl_info {
   /* parent Master_info structure */
   Master_info *mi;
 
+  longlong last_commmitted_seq;
+  longlong sequence_number{0};
+  bool is_wait_last_commited;
+  bool is_until_satisfied{false};
+  bool view_change_until_set{false};
+  bool need_to_wait{false};
+
   /* number of temporary tables open in this channel */
   std::atomic<int32> atomic_channel_open_temp_tables{0};
 
@@ -1184,13 +1191,10 @@ class Relay_log_info : public Rpl_info {
   */
   bool workers_array_initialized;
 
-  volatile ulong pending_jobs;
   mysql_mutex_t pending_jobs_lock;
   mysql_cond_t pending_jobs_cond;
   mysql_mutex_t exit_count_lock;  // mutex of worker exit count
   ulong mts_slave_worker_queue_len_max;
-  ulonglong mts_pending_jobs_size;      // actual mem usage by WQ:s
-  ulonglong mts_pending_jobs_size_max;  // max of WQ:s size forcing C to wait
   bool mts_wq_oversize;  // C raises flag to wait some memory's released
   Slave_worker
       *last_assigned_worker;  // is set to a Worker at assigning a group

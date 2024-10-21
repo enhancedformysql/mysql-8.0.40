@@ -2507,18 +2507,7 @@ done:
   /* Freeing the memroot will leave the THD::work_part_info invalid. */
   thd->work_part_info = nullptr;
 
-  /*
-    If we've allocated a lot of memory (compared to the default preallocation
-    size = 8192; note that we don't actually preallocate anymore), free
-    it so that one big query won't cause us to hold on to a lot of RAM forever.
-    If not, keep the last block so that the next query will hopefully be able to
-    run without allocating memory from the OS.
-
-    The factor 5 is pretty much arbitrary, but ends up allowing three
-    allocations (1 + 1.5 + 1.5²) under the current allocation policy.
-  */
-  constexpr size_t kPreallocSz = 40960;
-  if (thd->mem_root->allocated_size() < kPreallocSz)
+  if (thd->mem_root->allocated_size() < 5 * thd->variables.query_prealloc_size)
     thd->mem_root->ClearForReuse();
   else
     thd->mem_root->Clear();

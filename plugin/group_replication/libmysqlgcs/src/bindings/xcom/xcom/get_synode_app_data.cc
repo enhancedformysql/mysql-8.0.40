@@ -28,10 +28,10 @@
 
 #include "xcom/checked_data.h"
 #include "xcom/get_synode_app_data.h"
+#include "xcom/xcom_memory.h"
 #include "xcom/synode_no.h"  /* synode_eq */
 #include "xcom/xcom_base.h"  /* pm_finished */
 #include "xcom/xcom_cache.h" /* pax_machine, hash_get */
-#include "xcom/xcom_memory.h"
 
 static xcom_get_synode_app_data_result can_satisfy_request(
     synode_no_array const *const synodes);
@@ -187,7 +187,6 @@ static xcom_get_synode_app_data_result copy_synode_app_data_to_reply(
   checked_data const *cached_data = &p->a->body.app_u_u.data;
 
   reply->synode = *synode;
-  reply->origin = p->a->unique_id;
 
   /*
    We need to copy because by the time the reply is sent, the cache may have

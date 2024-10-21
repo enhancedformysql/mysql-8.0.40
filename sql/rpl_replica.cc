@@ -191,14 +191,6 @@ const char *relay_log_index = nullptr;
 const char *relay_log_basename = nullptr;
 
 /*
-  MTS load-ballancing parameter.
-  Max length of one MTS Worker queue. The value also determines the size
-  of Relay_log_info::gaq (see @c slave_start_workers()).
-  It can be set to any value in [1, ULONG_MAX - 1] range.
-*/
-const ulong mts_slave_worker_queue_len_max = 16384;
-
-/*
   Statistics go to the error log every # of seconds when
   --log_error_verbosity > 2
 */
@@ -2071,6 +2063,7 @@ bool start_slave_threads(bool need_lock_slave, bool wait_for_start,
   DBUG_TRACE;
   DBUG_EXECUTE_IF("uninitialized_source-info_structure", mi->inited = false;);
 
+  LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "start_slave_threads is called");
   if (!mi->inited || !mi->rli->inited) {
     int error = (!mi->inited ? ER_REPLICA_CM_INIT_REPOSITORY
                              : ER_REPLICA_AM_INIT_REPOSITORY);
@@ -2282,7 +2275,9 @@ bool sql_slave_killed(THD *thd, Relay_log_info *rli) {
 
   assert(rli->info_thd == thd);
   assert(rli->slave_running == 1);
-  if (rli->sql_thread_kill_accepted) return true;
+  if (rli->sql_thread_kill_accepted) {
+    return true;
+  }
   DBUG_EXECUTE_IF("stop_when_mta_in_group", rli->abort_slave = 1;
                   DBUG_SET("-d,stop_when_mta_in_group");
                   DBUG_SET("-d,simulate_stop_when_mta_in_group");
@@ -4966,15 +4961,19 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
       assert(rli->last_master_timestamp >= 0);
     }
 
-    if (rli->is_until_satisfied_before_dispatching_event(ev)) {
-      /*
-        Setting abort_slave flag because we do not want additional message about
-        error in query execution to be printed.
-      */
-      rli->abort_slave = true;
-      mysql_mutex_unlock(&rli->data_lock);
-      delete ev;
-      return SLAVE_APPLY_EVENT_UNTIL_REACHED;
+    if (rli->sequence_number == 0 || ev->get_type_code() != binary_log::VIEW_CHANGE_EVENT) {
+      if (rli->is_until_satisfied_before_dispatching_event(ev)) {
+        rli->is_until_satisfied = true;
+        if (rli->sequence_number == 0 || rli->until_condition == Relay_log_info::UNTIL_DONE 
+            || ev->get_type_code() == binary_log::GTID_LOG_EVENT) {
+          rli->abort_slave = true;
+        }
+        mysql_mutex_unlock(&rli->data_lock);
+        delete ev;
+        return SLAVE_APPLY_EVENT_UNTIL_REACHED;
+      }
+    } else {
+      rli->need_to_wait = true;
     }
 
     {
@@ -5188,6 +5187,7 @@ static int exec_relay_log_event(THD *thd, Relay_log_info *rli,
                             rli->trans_retries));
       }
     }
+
     if (exec_res) {
       delete ev;
       /* Raii object is explicitly updated 'cos this branch doesn't end func */
@@ -6112,13 +6112,6 @@ static void *handle_slave_worker(void *arg) {
 
   mysql_mutex_unlock(&w->jobs_lock);
 
-  mysql_mutex_lock(&rli->pending_jobs_lock);
-  rli->pending_jobs -= purge_cnt;
-  rli->mts_pending_jobs_size -= purge_size;
-  assert(rli->mts_pending_jobs_size < rli->mts_pending_jobs_size_max);
-
-  mysql_mutex_unlock(&rli->pending_jobs_lock);
-
   /*
      In MTS case cleanup_after_session() has be called explicitly.
      TODO: to make worker thd be deleted before Slave_worker instance.
@@ -6477,7 +6470,38 @@ bool mta_checkpoint_routine(Relay_log_info *rli, bool force) {
   do {
     if (!is_mts_db_partitioned(rli)) mysql_mutex_lock(&rli->mts_gaq_LOCK);
 
-    cnt = rli->gaq->move_queue_head(&rli->workers);
+    uint total = 0;
+    cnt = rli->gaq->move_queue_head(&rli->workers, rli->checkpoint_group, &total);
+    if (total != rli->rli_checkpoint_seqno) {
+      if (total < rli->rli_checkpoint_seqno) {
+        LogErr(ERROR_LEVEL, ER_RPL_MOVE_QUEUE_HEAD_WARNING_LOG,
+            total, rli->rli_checkpoint_seqno, cnt);
+        rli->rli_checkpoint_seqno = rli->rli_checkpoint_seqno - cnt;
+      } else {
+        ulong diff = total - rli->rli_checkpoint_seqno;
+        if (diff > 1) {
+          LogErr(WARNING_LEVEL, ER_RPL_MOVE_QUEUE_HEAD_WARNING_LOG,
+            total, rli->rli_checkpoint_seqno, cnt);
+          rli->rli_checkpoint_seqno = total - cnt;
+        } else {
+          if (rli->rli_checkpoint_seqno >= cnt) {
+            rli->rli_checkpoint_seqno = rli->rli_checkpoint_seqno - cnt;
+          } else {
+            LogErr(WARNING_LEVEL, ER_RPL_MOVE_QUEUE_HEAD_WARNING_LOG,
+                total, rli->rli_checkpoint_seqno, cnt);
+            rli->rli_checkpoint_seqno = total - cnt;
+          }
+        }
+      }
+    } else {
+      if (rli->rli_checkpoint_seqno >= cnt) {
+        rli->rli_checkpoint_seqno = rli->rli_checkpoint_seqno - cnt;
+      } else {
+        LogErr(ERROR_LEVEL, ER_RPL_MOVE_QUEUE_HEAD_WARNING_LOG,
+            total, rli->rli_checkpoint_seqno, cnt);
+        rli->rli_checkpoint_seqno = 0;
+      }
+    }
 
     if (!is_mts_db_partitioned(rli)) mysql_mutex_unlock(&rli->mts_gaq_LOCK);
 #ifndef NDEBUG
@@ -6688,9 +6712,7 @@ static int slave_start_workers(Relay_log_info *rli, ulong n, bool *mts_inited) {
   if (!rli->gaq->inited) return 1;
 
   // length of WQ is actually constant though can be made configurable
-  rli->mts_slave_worker_queue_len_max = mts_slave_worker_queue_len_max;
-  rli->mts_pending_jobs_size = 0;
-  rli->mts_pending_jobs_size_max = ::opt_mts_pending_jobs_size_max;
+  rli->mts_slave_worker_queue_len_max = opt_mts_replica_worker_queue_len_max;
   rli->mts_wq_underrun_w_id = MTS_WORKER_UNDEF;
   rli->mts_wq_excess_cnt = 0;
   rli->mts_wq_overrun_cnt = 0;
@@ -6870,9 +6892,6 @@ static void slave_stop_workers(Relay_log_info *rli, bool *mts_inited) {
        rli->wq_size_waits_cnt, rli->mts_total_wait_overlap.load(),
        rli->mts_wq_no_underrun_cnt, rli->mts_total_wait_worker_avail));
 
-  assert(rli->pending_jobs == 0);
-  assert(rli->mts_pending_jobs_size == 0);
-
 end:
   rli->mts_group_status = Relay_log_info::MTS_NOT_IN_GROUP;
   destroy_hash_workers(rli);
@@ -6977,6 +6996,7 @@ extern "C" void *handle_slave_sql(void *arg) {
   const char *errmsg;
   longlong slave_errno = 0;
   bool mts_inited = false;
+  bool abort_expected = false;
   Global_THD_manager *thd_manager = Global_THD_manager::get_instance();
   Commit_order_manager *commit_order_mngr = nullptr;
   Rpl_applier_reader applier_reader(rli);
@@ -7124,6 +7144,7 @@ extern "C" void *handle_slave_sql(void *arg) {
       Seconds_Behind_Master grows. No big deal.
     */
     rli->abort_slave = false;
+    rli->abort_slave_expected = false;
 
     /*
       Reset errors for a clean start (otherwise, if the master is idle, the SQL
@@ -7274,50 +7295,138 @@ extern "C" void *handle_slave_sql(void *arg) {
       // read next event
       mysql_mutex_lock(&rli->data_lock);
       ev = applier_reader.read_next_event();
+      if (rli->abort_slave_expected) {
+        abort_expected = true;
+      }
       mysql_mutex_unlock(&rli->data_lock);
 
-      // set additional context as needed by the scheduler before execution
-      // takes place
-      if (ev != nullptr && rli->is_parallel_exec() &&
-          rli->current_mts_submode != nullptr) {
-        if (rli->current_mts_submode->set_multi_threaded_applier_context(*rli,
-                                                                         *ev)) {
-          goto err;
+      if (!abort_expected) {
+        // set additional context as needed by the scheduler before execution
+        // takes place
+        if (ev != nullptr && rli->is_parallel_exec() &&
+            rli->current_mts_submode != nullptr) {
+          if (rli->current_mts_submode->set_multi_threaded_applier_context(*rli,
+                *ev)) {
+            goto err;
+          }
         }
-      }
 
-      // try to execute the event
-      switch (exec_relay_log_event(thd, rli, &applier_reader, ev)) {
-        case SLAVE_APPLY_EVENT_AND_UPDATE_POS_OK:
-          /** success, we read the next event. */
-          /** fall through */
-        case SLAVE_APPLY_EVENT_UNTIL_REACHED:
-          /** this will make the main loop abort in the next iteration */
-          /** fall through */
-        case SLAVE_APPLY_EVENT_RETRY:
-          /** single threaded applier has to retry.
+        // try to execute the event
+        switch (exec_relay_log_event(thd, rli, &applier_reader, ev)) {
+          case SLAVE_APPLY_EVENT_AND_UPDATE_POS_OK:
+            /** success, we read the next event. */
+            /** fall through */
+          case SLAVE_APPLY_EVENT_UNTIL_REACHED:
+            /** this will make the main loop abort in the next iteration */
+            /** fall through */
+          case SLAVE_APPLY_EVENT_RETRY:
+            /** single threaded applier has to retry.
               Next iteration reads the same event. */
-          break;
+            break;
 
-        case SLAVE_APPLY_EVENT_AND_UPDATE_POS_APPLY_ERROR:
-          /** fall through */
-        case SLAVE_APPLY_EVENT_AND_UPDATE_POS_UPDATE_POS_ERROR:
-          /** fall through */
-        case SLAVE_APPLY_EVENT_AND_UPDATE_POS_APPEND_JOB_ERROR:
-          main_loop_error = true;
-          break;
+          case SLAVE_APPLY_EVENT_AND_UPDATE_POS_APPLY_ERROR:
+            /** fall through */
+          case SLAVE_APPLY_EVENT_AND_UPDATE_POS_UPDATE_POS_ERROR:
+            /** fall through */
+          case SLAVE_APPLY_EVENT_AND_UPDATE_POS_APPEND_JOB_ERROR:
+            main_loop_error = true;
+            break;
 
-        default:
-          /* This shall never happen. */
-          assert(0); /* purecov: inspected */
-          break;
+          default:
+            /* This shall never happen. */
+            assert(0); /* purecov: inspected */
+            break;
+        }
+
+        if (rli->need_to_wait) {
+          LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "The SQL thread needs to wait");
+          do {
+            my_sleep(200);
+            if (rli->abort_slave) {
+              main_loop_error = true;
+              break;
+            }
+          } while(!rli->view_change_until_set);
+          LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "The SQL thread has finished waiting");
+          rli->view_change_until_set = false;
+          rli->need_to_wait = false;
+        }
+
+      } else {
+        main_loop_error = true;
       }
     }
   err:
 
+    LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "The SQL thread is starting to stop");
+    bool need_wait_worker = false;
+    int wait_counter = 0;
+    do {
+      need_wait_worker = false;
+      if (!rli->workers.empty()) {
+        for (int i = static_cast<int>(rli->workers.size()) - 1; i >= 0; i--) {
+          Slave_worker *w = rli->workers[i];
+          mysql_mutex_lock(&w->jobs_lock);
+
+          if (w->running_status != Slave_worker::RUNNING) {
+            mysql_mutex_unlock(&w->jobs_lock);
+            continue;
+          }
+
+          if (w->is_wait_last_commited) {
+            if (wait_counter < 100) {
+              need_wait_worker = true;
+              mysql_mutex_unlock(&w->jobs_lock);
+              break;
+            }
+          } else {
+            if (w->jobs.len > 0) {
+              if (wait_counter < 6000) {
+                need_wait_worker = true;
+                mysql_mutex_unlock(&w->jobs_lock);
+                break;
+              } else {
+                mysql_mutex_unlock(&w->jobs_lock);
+                need_wait_worker =false;
+                break;
+              }
+            }
+          }
+          mysql_mutex_unlock(&w->jobs_lock);
+        }
+      }
+
+      if (need_wait_worker) {
+        wait_counter++;
+        my_sleep(10000);
+      }
+    } while(need_wait_worker);
+              
+    LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO,
+        "The SQL thread has finished waiting for the worker to complete");
     // report error
-    if (main_loop_error == true && !sql_slave_killed(thd, rli))
-      slave_errno = report_apply_event_error(thd, rli);
+    if (!abort_expected) {
+      if (main_loop_error == true && (!sql_slave_killed(thd, rli))) {
+        slave_errno = report_apply_event_error(thd, rli);
+      }
+    } else {
+      char msg_stopped_mts[] =
+        "... The replica coordinator and worker threads are stopped, "
+        "possibly "
+        "leaving data in inconsistent state. A restart should "
+        "restore consistency automatically, although using non-transactional "
+        "storage for data or info tables or DDL queries could lead to "
+        "problems. "
+        "In such cases you have to examine your data (see documentation for "
+        "details).";
+      rli->report(!rli->is_error()
+          ? ERROR_LEVEL
+          : WARNING_LEVEL,  // an error was reported by Worker
+          ER_MTA_INCONSISTENT_DATA,
+          ER_THD(thd, ER_MTA_INCONSISTENT_DATA), msg_stopped_mts);
+
+      slave_errno = ER_RPL_REPLICA_ERROR_RUNNING_QUERY;
+    }
 
     /* At this point the SQL thread will not try to work anymore. */
     rli->atomic_is_stopping = true;
@@ -7325,7 +7434,12 @@ extern "C" void *handle_slave_sql(void *arg) {
         binlog_relay_io, applier_stop,
         (thd, rli->mi, rli->is_error() || !rli->sql_thread_kill_accepted));
 
+    LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "The SQL thread has finished running RUN_HOOK");
     slave_stop_workers(rli, &mts_inited);  // stopping worker pool
+    rli->atomic_is_stopping = false;
+    rli->slave_running = 0;
+    rli->is_until_satisfied = false;
+    LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "The SQL thread has finished running slave_stop_workers");
     /* Thread stopped. Print the current replication position to the log */
     if (slave_errno)
       LogErr(ERROR_LEVEL, slave_errno, rli->get_rpl_log_name(),
@@ -7369,10 +7483,6 @@ extern "C" void *handle_slave_sql(void *arg) {
     /* We need data_lock, at least to wake up any waiting source_pos_wait() */
     mysql_mutex_lock(&rli->data_lock);
     applier_reader.close();
-    assert(rli->slave_running == 1);  // tracking buffer overrun
-    /* When source_pos_wait() wakes up it will check this and terminate */
-    rli->slave_running = 0;
-    rli->atomic_is_stopping = false;
     /* Forget the relay log's format */
     if (rli->set_rli_description_event(nullptr)) {
 #ifndef NDEBUG
@@ -7424,6 +7534,7 @@ extern "C" void *handle_slave_sql(void *arg) {
       to NULL.
     */
     mysql_thread_set_psi_THD(nullptr);
+    LogErr(INFORMATION_LEVEL, ER_RPL_GENERAL_INFO, "The SQL thread has finished running");
     delete thd;
 
     /*

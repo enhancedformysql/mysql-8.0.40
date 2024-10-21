@@ -737,7 +737,6 @@ class Gcs_xcom_view_change_control_interface {
   virtual Gcs_view *get_current_view() = 0;
   virtual bool belongs_to_group() = 0;
   virtual void set_belongs_to_group(bool belong) = 0;
-  virtual void set_unsafe_current_view(Gcs_view *current_view) = 0;
   virtual Gcs_view *get_unsafe_current_view() = 0;
 
   // Keep track if GCS as a whole has been ordered to finalize;
@@ -773,7 +772,6 @@ class Gcs_xcom_view_change_control
   Gcs_view *get_current_view() override;
   bool belongs_to_group() override;
   void set_belongs_to_group(bool belong) override;
-  void set_unsafe_current_view(Gcs_view *current_view) override;
   Gcs_view *get_unsafe_current_view() override;
 
   void finalize() override;

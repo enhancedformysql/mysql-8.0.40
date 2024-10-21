@@ -65,7 +65,7 @@ INSERT INTO t1 VALUES (1);
 # This is the expected state with a non-MTS slave.
 --let $cond1 = "System lock"
 # This is the expected state with a MTS slave.
---let $cond2 = "Waiting for workers to exit"
+--let $cond2 = "Reading event from the relay log"
 # This is the state that the thread has while applying RBR events
 --let $cond4 = "Applying batch of row changes (write)"
 --let $assert_cond= [ SELECT "$ch1_sql_status" = $cond1 OR "$ch1_sql_status" = $cond2 OR "$ch1_sql_status" = $cond4 ]

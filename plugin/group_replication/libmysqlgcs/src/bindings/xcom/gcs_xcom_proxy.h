@@ -71,8 +71,7 @@ class Gcs_xcom_proxy {
     @c delete_node_address
   */
 
-  virtual node_address *new_node_address_uuid(unsigned int n,
-                                              char const *names[],
+  virtual node_address *new_node_address_uuid(unsigned int n, char *names[],
                                               blob uuids[]) = 0;
 
   /**
@@ -199,42 +198,6 @@ class Gcs_xcom_proxy {
       uint32_t group_id, xcom_event_horizon event_horizon) = 0;
 
   /**
-    This member function is responsible for triggering the reconfiguration of
-    the leaders of the XCom configuration. This function is asynchronous, so you
-    need to poll @c xcom_get_leaders to actually validate that the
-    reconfiguration was successful.
-
-    @param group_id The identifier of the group
-    @param nr_preferred_leaders Number of preferred leaders, i.e. elements in
-                                @c preferred_leaders
-    @param preferred_leaders The "host:port" of the preferred leaders
-    @param max_nr_leaders Maximum number of active leaders
-    @returns true (false) on success (failure). Success means that XCom will
-             process our request, failure means it won't. There could be errors
-             later in the process of setting the leaders. Since this is
-             basically an asynchronous function, one needs to busy-wait on
-             @c xcom_client_get_leaders to validate that the leaders were
-             modified.
-  */
-  virtual bool xcom_client_set_leaders(uint32_t group_id,
-                                       u_int nr_preferred_leaders,
-                                       char const *preferred_leaders[],
-                                       node_no max_nr_leaders) = 0;
-
-  /**
-    This member function is responsible for retrieving the leaders of the
-    XCom configuration.
-
-    @param[in] group_id The identifier of the group
-    @param[out] leaders A reference to where the group's leaders will be written
-                        to
-    @retval true if successful and @c leaders was written to
-    @retval false otherwise
- */
-  virtual bool xcom_client_get_leaders(uint32_t group_id,
-                                       leader_info_data &leaders) = 0;
-
-  /**
    This member function is responsible for retrieving the application payloads
    decided in the synodes in @c synodes, from the XCom instance connected to
    via @c fd.
@@ -305,6 +268,8 @@ class Gcs_xcom_proxy {
   */
 
   virtual void xcom_init(xcom_port listen_port) = 0;
+
+  virtual bool xcom_client_notify_truly_remove(const char *address) = 0;
 
   /**
     This member function finishes the XCom thread. This function must be
@@ -690,14 +655,6 @@ class Gcs_xcom_proxy {
   */
   virtual bool xcom_set_event_horizon(uint32_t group_id_hash,
                                       xcom_event_horizon event_horizon) = 0;
-
-  virtual bool xcom_set_leaders(uint32_t group_id_hash,
-                                u_int nr_preferred_leaders,
-                                char const *preferred_leaders[],
-                                node_no max_nr_leaders) = 0;
-  virtual bool xcom_get_leaders(uint32_t group_id_hash,
-                                leader_info_data &leaders) = 0;
-
   /**
     Function to reconfigure the maximum size of the XCom cache.
 
@@ -751,6 +708,8 @@ class Gcs_xcom_proxy {
    * Closes the input channel to XCom.
    */
   virtual void xcom_input_disconnect() = 0;
+
+  virtual bool notify_xcom_truly_remove(const char *address) = 0;
 
   /**
    * Attempts to send the command @c data to XCom. (Called by GCS.)
@@ -854,16 +813,12 @@ class Gcs_xcom_proxy_base : public Gcs_xcom_proxy {
                               xcom_event_horizon &event_horizon) override;
   bool xcom_set_event_horizon(uint32_t group_id_hash,
                               xcom_event_horizon event_horizon) override;
-  bool xcom_set_leaders(uint32_t group_id_hash, u_int nr_preferred_leaders,
-                        char const *preferred_leaders[],
-                        node_no max_nr_leaders) override;
-  bool xcom_get_leaders(uint32_t group_id_hash,
-                        leader_info_data &leaders) override;
   bool xcom_get_synode_app_data(
       Gcs_xcom_node_information const &xcom_instance, uint32_t group_id_hash,
       const std::unordered_set<Gcs_xcom_synode> &synode_set,
       synode_app_data_array &reply) override;
   bool xcom_set_cache_size(uint64_t size) override;
+  bool notify_xcom_truly_remove(const char *address) override;
   bool xcom_force_nodes(Gcs_xcom_nodes &nodes, uint32_t group_id_hash) override;
 
   bool initialize_network_manager() override;
@@ -889,11 +844,10 @@ class Gcs_xcom_proxy_base : public Gcs_xcom_proxy {
 */
 class Gcs_xcom_proxy_impl : public Gcs_xcom_proxy_base {
  public:
-  explicit Gcs_xcom_proxy_impl();
   Gcs_xcom_proxy_impl(unsigned int wt);
   ~Gcs_xcom_proxy_impl() override;
 
-  node_address *new_node_address_uuid(unsigned int n, char const *names[],
+  node_address *new_node_address_uuid(unsigned int n, char *names[],
                                       blob uuids[]) override;
   void delete_node_address(unsigned int n, node_address *na) override;
   bool xcom_client_add_node(connection_descriptor *fd, node_list *nl,
@@ -905,18 +859,13 @@ class Gcs_xcom_proxy_impl : public Gcs_xcom_proxy_base {
       uint32_t group_id, xcom_event_horizon &event_horizon) override;
   bool xcom_client_set_event_horizon(uint32_t group_id,
                                      xcom_event_horizon event_horizon) override;
-  bool xcom_client_set_leaders(uint32_t gid, u_int nr_preferred_leaders,
-                               char const *preferred_leaders[],
-                               node_no max_nr_leaders) override;
-  bool xcom_client_get_leaders(uint32_t gid,
-                               leader_info_data &leaders) override;
-
   bool xcom_client_get_synode_app_data(connection_descriptor *con,
                                        uint32_t group_id_hash,
                                        synode_no_array &synodes,
                                        synode_app_data_array &reply) override;
 
   bool xcom_client_set_cache_size(uint64_t size) override;
+  bool xcom_client_notify_truly_remove(const char *address) override;
   bool xcom_client_boot(node_list *nl, uint32_t group_id) override;
   connection_descriptor *xcom_client_open_connection(std::string,
                                                      xcom_port port) override;

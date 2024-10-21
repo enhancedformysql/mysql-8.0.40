@@ -22,14 +22,10 @@ include/rpl_reconnect.inc
 SET @@global.group_replication_group_seeds="GROUP_SEEDS_SERVER2";
 SET @@global.group_replication_local_address="LOCAL_ADDRESS_SERVER2";
 SET @@global.group_replication_group_name="GROUP_REPLICATION_GROUP_NAME";
-SET @@global.group_replication_enforce_update_everywhere_checks=OFF;
-SET @@global.group_replication_single_primary_mode=ON;
 [connection server_3]
 SET @@global.group_replication_group_seeds="GROUP_SEEDS_SERVER3";
 SET @@global.group_replication_local_address="LOCAL_ADDRESS_SERVER3";
 SET @@global.group_replication_group_name="GROUP_REPLICATION_GROUP_NAME";
-SET @@global.group_replication_enforce_update_everywhere_checks=OFF;
-SET @@global.group_replication_single_primary_mode=ON;
 [connection server1]
 # Wait for the member state for server3 to be unreachable
 include/gr_wait_for_member_state.inc

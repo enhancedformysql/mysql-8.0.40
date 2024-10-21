@@ -46,7 +46,6 @@
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_group_member_information.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_networking.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_state_exchange.h"
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_statistics_interface.h"
 
 /**
  * Keep track of the most recent XCom configuration the node will deliver
@@ -99,14 +98,6 @@ class Gcs_xcom_config {
    * @returns true if the event horizons are the same, false otherwise
    */
   bool same_event_horizon(xcom_event_horizon const &event_horizon) const;
-  /**
-   * Checks whether this configuration's membership matches the given
-   * membership.
-   *
-   * @param xcom_nodes the membership to compare against
-   * @returns true if the memberships are the same, false otherwise
-   */
-  bool same_xcom_nodes_v3(Gcs_xcom_nodes const &xcom_nodes) const;
   /*
    * This class will have a singleton object, so we delete the {copy,move}
    * {constructor,assignment}. This way the compiler slaps us on the wrist if we
@@ -131,7 +122,6 @@ class Gcs_suspicions_manager;
 typedef struct xcom_group_interfaces {
   Gcs_control_interface *control_interface;
   Gcs_communication_interface *communication_interface;
-  Gcs_statistics_interface *statistics_interface;
   Gcs_group_management_interface *management_interface;
 
   /*
@@ -204,9 +194,6 @@ class Gcs_xcom_interface : public Gcs_interface {
   Gcs_communication_interface *get_communication_session(
       const Gcs_group_identifier &group_identifier) override;
 
-  Gcs_statistics_interface *get_statistics(
-      const Gcs_group_identifier &group_identifier) override;
-
   Gcs_group_management_interface *get_management_session(
       const Gcs_group_identifier &group_identifier) override;
 
@@ -216,6 +203,8 @@ class Gcs_xcom_interface : public Gcs_interface {
                                           Gcs_suspicions_manager *mgr);
 
   enum_gcs_error set_logger(Logger_interface *logger) override;
+
+  void update_xcom_cache_mode(int new_mode) override;
 
   void set_xcom_group_information(const std::string &group_id);
 

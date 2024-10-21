@@ -28,7 +28,6 @@
 --source include/have_group_replication_plugin.inc
 --let $rpl_skip_group_replication_start= 1
 --let $rpl_server_count= 2
---let $rpl_group_replication_single_primary_mode=1
 --source include/group_replication.inc
 
 --let $rpl_connection_name= server1
@@ -196,8 +195,6 @@ SET @@GLOBAL.DEBUG= '-d,launch_hook_trans_begin_assert_if_hold';
 --eval SET GLOBAL group_replication_local_address= "$_group_replication_local_address"
 --replace_result $_group_replication_group_seeds GROUP_SEEDS_SERVER2
 --eval SET GLOBAL group_replication_group_seeds= "$_group_replication_group_seeds"
---eval SET GLOBAL group_replication_enforce_update_everywhere_checks= FALSE;
---eval SET GLOBAL group_replication_single_primary_mode= TRUE;
 
 SET @@SESSION.group_replication_consistency= DEFAULT;
 

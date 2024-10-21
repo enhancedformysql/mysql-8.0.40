@@ -39,9 +39,9 @@
 #include "xcom/network/network_provider_manager.h"
 #include "xcom/site_struct.h"
 #include "xcom/task_arg.h"
-#include "xcom/task_debug.h"
 #include "xcom/x_platform.h"
 #include "xcom/xcom_cache.h"
+#include "xcom/task_debug.h"
 #include "xcom/xcom_input_request.h"
 #include "xcom/xcom_os_layer.h"
 #include "xcom/xdr_utils.h"
@@ -52,18 +52,9 @@ typedef unsigned long long synode_cnt;
 
 #define SET_EXECUTED_MSG(x) \
   do {                      \
-    IFDBG(D_NONE, FN);      \
     set_executed_msg(x);    \
   } while (0)
 
-/* Constants */
-
-#ifdef XCOM_TRANSACTIONS
-static trans_id const last_trans = {0xffffffff, 0xffffffff};
-
-#endif
-
-extern int ARBITRATOR_HACK;
 extern task_arg null_arg;
 
 void *xcom_thread_main(void *cp);
@@ -72,12 +63,9 @@ synode_no incr_synode(synode_no synode);
 
 synode_no decr_synode(synode_no synode);
 
-char *dbg_pax_msg(pax_msg const *p);
 pax_msg *dispatch_op(site_def const *site, pax_msg *p, linkage *reply_queue);
 synode_no set_executed_msg(synode_no msgno);
-void request_values(synode_no find, synode_no end);
 void set_group(uint32_t id);
-void check_tasks();
 int xcom_booted();
 int iamthegreatest(site_def const *s);
 void xcom_send(app_data_ptr a, pax_msg *msg);
@@ -92,16 +80,11 @@ int xcom_taskmain2(xcom_port listen_port);
 void set_max_synode(synode_no synode);
 synode_no set_current_message(synode_no msgno);
 
-int is_real_recover(app_data_ptr a);
-
 void init_xcom_base();
 uint32_t new_id();
-synode_no get_boot_key();
 site_def const *get_executor_site();
 site_def *get_executor_site_rw();
-site_def const *get_proposer_site();
 synode_no get_current_message();
-void start_run_tasks();
 
 int is_node_v4_reachable(char *node_address);
 int is_node_v4_reachable_with_info(struct addrinfo *retrieved_addr_info);
@@ -149,7 +132,7 @@ int pre_process_incoming_ping(site_def const *site, pax_msg const *pm,
 
 #define APP ep->client_msg->p->a
 
-#define FIND_MAX (MIN_LENGTH / 10)
+#define FIND_MAX (MAX_CACHE_SIZE / 10)
 
 #define x_actions                                                              \
   X(x_fsm_wait)                                                                \
@@ -163,40 +146,11 @@ enum xcom_actions { x_actions };
 typedef enum xcom_actions xcom_actions;
 #undef X
 
-extern const char *xcom_actions_name[];
-
-struct add_args {
-  char *addr;
-  xcom_port port;
-  node_list *nl;
-};
-typedef struct add_args add_args;
-
-synode_no xcom_get_last_removed_from_cache();
-
 char const *xcom_fsm(xcom_actions action, task_arg fsmargs);
-void site_post_install_action(site_def *site);
 
 void site_install_action(site_def *site, cargo_type operation);
-void send_client_add_node(char *srv, xcom_port port, node_list *nl);
-void send_client_remove_node(char *srv, xcom_port port, node_list *nl);
 
-typedef void (*xcom_full_data_receiver)(site_def const *site, pax_machine *pma,
-                                        app_data_ptr app,
-                                        delivery_status app_status);
-void set_xcom_full_data_receiver(xcom_full_data_receiver x);
-
-typedef void (*xcom_full_local_view_receiver)(site_def const *site,
-                                              node_set nodes);
-void set_xcom_full_local_view_receiver(xcom_full_local_view_receiver x);
-
-typedef void (*xcom_full_global_view_receiver)(site_def const *site,
-                                               synode_no message_id,
-                                               node_set nodes);
-void set_xcom_full_global_view_receiver(xcom_full_global_view_receiver x);
-
-typedef void (*xcom_data_receiver)(synode_no message_id, synode_no origin,
-                                   site_def const *site, node_set nodes,
+typedef void (*xcom_data_receiver)(synode_no message_id, node_set nodes,
                                    u_int size, synode_no last_removed,
                                    char *data);
 void set_xcom_data_receiver(xcom_data_receiver x);
@@ -211,8 +165,6 @@ void set_xcom_global_view_receiver(xcom_global_view_receiver x);
 
 typedef void (*xcom_config_receiver)(app_data *a);
 
-void set_xcom_config_receiver(xcom_config_receiver x);
-
 void set_xcom_logger(xcom_logger x);
 void set_xcom_debugger(xcom_debugger x);
 void set_xcom_debugger_check(xcom_debugger_check x);
@@ -222,11 +174,9 @@ typedef void (*app_snap_handler)(blob *gcs_snap, synode_no log_start,
 void set_app_snap_handler(app_snap_handler x);
 
 typedef synode_no (*app_snap_getter)(blob *gcs_snap);
-void set_app_snap_getter(app_snap_getter x);
 
 typedef void (*xcom_state_change_cb)(int status);
 void set_xcom_run_cb(xcom_state_change_cb x);
-void set_xcom_terminate_cb(xcom_state_change_cb x);
 void set_xcom_exit_cb(xcom_state_change_cb x);
 void set_xcom_expel_cb(xcom_state_change_cb x);
 
@@ -235,23 +185,14 @@ void set_should_exit_getter(should_exit_getter x);
 
 typedef void (*xcom_recovery_cb)();
 
-void set_xcom_recovery_init_cb(xcom_recovery_cb x);
-
-void set_xcom_recovery_restart_cb(xcom_recovery_cb x);
-
-void set_xcom_recovery_begin_cb(xcom_recovery_cb x);
-
-void set_xcom_recovery_end_cb(xcom_recovery_cb x);
-
 app_data_ptr init_config_with_group(app_data *a, node_list *nl, cargo_type type,
                                     uint32_t group_id);
 app_data_ptr init_set_event_horizon_msg(app_data *a, uint32_t group_id,
                                         xcom_event_horizon event_horizon);
-app_data_ptr init_get_leaders_msg(app_data *a, uint32_t group_id);
 app_data_ptr init_set_cache_size_msg(app_data *a, uint64_t cache_limit);
 app_data_ptr init_get_event_horizon_msg(app_data *a, uint32_t group_id);
+app_data_ptr init_set_notify_truly_remove_msg(app_data *a, const char *address);
 app_data_ptr init_app_msg(app_data *a, char *payload, u_int payload_size);
-app_data_ptr init_terminate_command(app_data *a);
 
 void terminate_and_exit();
 
@@ -272,32 +213,20 @@ void xcom_input_free_signal_connection(void);
 typedef int (*xcom_socket_accept_cb)(int fd, site_def const *config);
 int set_xcom_socket_accept_cb(xcom_socket_accept_cb x);
 
-int xcom_client_disable_arbitrator(connection_descriptor *fd);
-int xcom_client_enable_arbitrator(connection_descriptor *fd);
 int xcom_client_add_node(connection_descriptor *fd, node_list *nl,
                          uint32_t group_id);
 int xcom_client_boot(connection_descriptor *fd, node_list *nl,
                      uint32_t group_id);
-int xcom_client_force_add_node(connection_descriptor *fd, node_list *nl,
-                               uint32_t group_id);
 int xcom_client_force_config(connection_descriptor *fd, node_list *nl,
                              uint32_t group_id);
-int xcom_client_force_remove_node(connection_descriptor *fd, node_list *nl,
-                                  uint32_t group_id);
 int xcom_client_remove_node(connection_descriptor *fd, node_list *nl,
                             uint32_t group_id);
-int64_t xcom_client_send_die(connection_descriptor *fd);
-int64_t xcom_client_send_data(uint32_t size, char *data,
-                              connection_descriptor *fd);
 xcom_event_horizon xcom_get_minimum_event_horizon();
 xcom_event_horizon xcom_get_maximum_event_horizon();
 int xcom_client_get_event_horizon(connection_descriptor *fd, uint32_t group_id,
                                   xcom_event_horizon *event_horizon);
 int xcom_client_set_event_horizon(connection_descriptor *fd, uint32_t group_id,
                                   xcom_event_horizon event_horizon);
-int xcom_client_terminate_and_exit(connection_descriptor *fd);
-int xcom_client_set_cache_limit(connection_descriptor *fd,
-                                uint64_t cache_limit);
 int xcom_client_get_synode_app_data(connection_descriptor *const fd,
                                     uint32_t group_id,
                                     synode_no_array *const synodes,
@@ -409,7 +338,8 @@ void init_propose_msg(pax_msg *p);
  * message of the Paxos protocol) if the Acceptor accepts the Accept
  * @retval NULL otherwise
  */
-pax_msg *handle_simple_accept(pax_machine *p, pax_msg *m, synode_no synode);
+pax_msg *handle_simple_accept(pax_machine *p, pax_msg *m, synode_no synode,
+                              bool skip_flag);
 /**
  * Process the incoming acknowledge from an Acceptor to a sent Accept, as in
  * the message for Phase 2 (b) of the Paxos protocol. Executed by Proposers.
@@ -457,38 +387,6 @@ bool_t should_handle_need_boot(site_def const *site, pax_msg *p);
  */
 void init_need_boot_op(pax_msg *p, node_address *identity);
 
-int xcom_client_set_max_leaders(connection_descriptor *fd, node_no max_leaders,
-                                uint32_t group_id);
-
-void init_set_max_leaders(uint32_t group_id, app_data *a, node_no max_leaders);
-void init_set_leaders(uint32_t group_id, app_data *a,
-                      leader_array const leaders);
-void init_set_leaders(uint32_t group_id, app_data *a, u_int n,
-                      char const *names[]);
-void init_set_leaders(uint32_t group_id, app_data *leader_app,
-                      leader_array const leaders, app_data *max_app,
-                      node_no max_leaders);
-void init_set_leaders(uint32_t group_id, app_data *leader_app, u_int n,
-                      char const *names[], app_data *max_app,
-                      node_no max_leaders);
-
-int xcom_client_set_leaders(connection_descriptor *fd,
-                            leader_array const leaders, uint32_t group_id);
-int xcom_client_set_leaders(connection_descriptor *fd, u_int n,
-                            char const *names[], uint32_t group_id);
-int xcom_client_set_leaders(connection_descriptor *fd,
-                            leader_array const leaders, node_no max_leaders,
-                            uint32_t group_id);
-int xcom_client_set_leaders(connection_descriptor *fd, u_int n,
-                            char const *names[], node_no max_leaders,
-                            uint32_t group_id);
-
-int xcom_client_get_leaders(connection_descriptor *fd, uint32_t group_id,
-                            leader_info_data *leaders);
-
-typedef void (*xcom_election_cb)(leader_array leaders);
-void set_xcom_election_cb(xcom_election_cb x);
-
 static inline char *strerr_msg(char *buf, size_t len, int nr) {
 #if defined(_WIN32)
   strerror_s(buf, len, nr);
@@ -506,13 +404,9 @@ void xcom_sleep(unsigned int seconds);
 void set_xcom_comms_cb(xcom_state_change_cb x);
 
 extern "C" synode_no get_delivered_msg();
-void set_max_synode_from_unified_boot(synode_no unified_boot_synode);
 void send_x_fsm_complete();
-synode_no get_default_start(app_data_ptr a);
 synode_no get_last_delivered_msg();
 void set_log_end(gcs_snapshot *gcs);
-
-extern "C" void synthesize_leaders(leader_array *leaders);
 
 #define XCOM_FSM(action, arg)                           \
   do {                                                  \
@@ -522,6 +416,5 @@ extern "C" void synthesize_leaders(leader_array *leaders);
   } while (0)
 
 int pm_finished(pax_machine *p);
-bool_t handle_max_leaders(app_data_ptr a);
 
 #endif

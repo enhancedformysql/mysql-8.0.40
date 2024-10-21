@@ -24,10 +24,6 @@
 #ifndef CONSISTENCY_MANAGER_INCLUDED
 #define CONSISTENCY_MANAGER_INCLUDED
 
-#define CONSISTENCY_INFO_OUTCOME_OK 0
-#define CONSISTENCY_INFO_OUTCOME_ERROR 1
-#define CONSISTENCY_INFO_OUTCOME_COMMIT 2
-
 #include <mysql/group_replication_priv.h>
 #include <mysql/plugin_group_replication.h>
 #include <atomic>
@@ -107,26 +103,6 @@ class Transaction_consistency_info {
   */
   void operator delete(void *ptr) noexcept { my_free(ptr); }
 
-  /**
-    Constructor
-
-    @param[in]  thread_id         the thread that is executing the transaction
-    @param[in]  local_transaction true if this transaction did originate from
-                                  this server
-    @param[in]  sid               transaction sid
-    @param[in]  sidno             transaction sidno
-    @param[in]  gno               transaction gno
-    @param[in]  consistency_level the transaction consistency
-    @param[in]  members_that_must_prepare_the_transaction
-                                  list of the members that must prepare the
-                                  transaction before it is allowed to commit
-  */
-  Transaction_consistency_info(
-      my_thread_id thread_id, bool local_transaction, const rpl_sid *sid,
-      rpl_sidno sidno, rpl_gno gno,
-      enum_group_replication_consistency_level consistency_level,
-      Members_list *members_that_must_prepare_the_transaction);
-
   virtual ~Transaction_consistency_info();
 
   /**
@@ -143,14 +119,6 @@ class Transaction_consistency_info {
             false  otherwise
   */
   bool is_local_transaction();
-
-  /**
-    Is the transaction prepared locally?
-
-   @return  true   yes
-            false  otherwise
-  */
-  bool is_transaction_prepared_locally();
 
   /**
     Get the transaction sidno.
@@ -181,70 +149,6 @@ class Transaction_consistency_info {
   */
   bool is_a_single_member_group();
 
-  /**
-    Did all other ONLINE members already prepared the transaction?
-
-    @return  true   yes
-             false  otherwise
-  */
-  bool is_the_transaction_prepared_remotely();
-
-  /**
-    Call action after this transaction being prepared on this member
-    applier.
-
-    @param[in]  thread_id      the applier thread id
-    @param[in]  member_status  this member status
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int after_applier_prepare(
-      my_thread_id thread_id,
-      Group_member_info::Group_member_status member_status);
-
-  /**
-    Call action after this transaction being prepared by other member.
-
-    @param[in]  gcs_member_id  the member id
-
-    @return Operation status
-      @retval CONSISTENCY_INFO_OUTCOME_OK      OK
-      @retval CONSISTENCY_INFO_OUTCOME_ERROR   error
-      @retval CONSISTENCY_INFO_OUTCOME_COMMIT  transaction must proceeded to
-    commit
-  */
-  int handle_remote_prepare(const Gcs_member_identifier &gcs_member_id);
-
-  /**
-    Call action after members leave the group.
-    If any of these members are on the prepare wait list, they will
-    be removed. If the lists becomes empty, the transaction will proceed
-    to commit.
-
-    @param[in]  leaving_members  the members that left
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int handle_member_leave(
-      const std::vector<Gcs_member_identifier> &leaving_members);
-
- private:
-  my_thread_id m_thread_id;
-  const bool m_local_transaction;
-  const bool m_sid_specified;
-  rpl_sid m_sid;
-  const rpl_sidno m_sidno;
-  const rpl_gno m_gno;
-  const enum_group_replication_consistency_level m_consistency_level;
-  Members_list *m_members_that_must_prepare_the_transaction;
-  std::unique_ptr<Checkable_rwlock>
-      m_members_that_must_prepare_the_transaction_lock;
-  bool m_transaction_prepared_locally;
-  bool m_transaction_prepared_remotely;
 };
 
 typedef std::pair<rpl_sidno, rpl_gno> Transaction_consistency_manager_key;
@@ -264,9 +168,7 @@ typedef std::map<
   @class Transaction_consistency_manager
 
   The consistency information of all ongoing transactions which have
-  consistency GROUP_REPLICATION_CONSISTENCY_BEFORE,
-  GROUP_REPLICATION_CONSISTENCY_AFTER or
-  GROUP_REPLICATION_CONSISTENCY_BEFORE_AND_AFTER.
+  consistency GROUP_REPLICATION_CONSISTENCY_BEFORE.
 */
 class Transaction_consistency_manager : public Group_transaction_listener {
  public:
@@ -296,76 +198,9 @@ class Transaction_consistency_manager : public Group_transaction_listener {
   int after_certification(Transaction_consistency_info *transaction_info);
 
   /**
-    Call action after a transaction being prepared on this member
-    applier.
-
-    @param[in]  sidno          the transaction sidno
-    @param[in]  gno            the transaction gno
-    @param[in]  thread_id      the applier thread id
-    @param[in]  member_status  this member status
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int after_applier_prepare(
-      rpl_sidno sidno, rpl_gno gno, my_thread_id thread_id,
-      Group_member_info::Group_member_status member_status);
-
-  /**
-    Call action after a transaction being prepared by other member.
-
-    If this sid is NULL that means this transaction sid is the group
-    name.
-
-    @param[in]  sid            the transaction sid
-    @param[in]  gno            the transaction gno
-    @param[in]  gcs_member_id  the member id
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int handle_remote_prepare(const rpl_sid *sid, rpl_gno gno,
-                            const Gcs_member_identifier &gcs_member_id);
-
-  /**
-    Call action after members leave the group.
-    If any of these members are on the prepare wait lists, they will
-    be removed. If any those lists become empty, those transactions
-    proceed to commit.
-
-    @param[in]  leaving_members  the members that left
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int handle_member_leave(
-      const std::vector<Gcs_member_identifier> &leaving_members);
-
-  /**
-    Call action after commit a transaction on this member.
-    If new transactions are waiting for this prepared transaction
-    to be committed, they will be released.
-
-    @param[in]  thread_id      the transaction thread id
-    @param[in]  sidno          the transaction sidno
-    @param[in]  gno            the transaction gno
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int after_commit(my_thread_id thread_id, rpl_sidno sidno,
-                   rpl_gno gno) override;
-
-  /**
     Call action before a transaction starts.
     It will handle transactions with
-    GROUP_REPLICATION_CONSISTENCY_BEFORE consistency and any others
-    that need to wait for preceding prepared transactions to
-    commit.
+    GROUP_REPLICATION_CONSISTENCY_BEFORE consistency.
 
     @param[in]  thread_id         the thread that is executing the
                                   transaction
@@ -399,30 +234,6 @@ class Transaction_consistency_manager : public Group_transaction_listener {
       my_thread_id thread_id, const Gcs_member_identifier &gcs_member_id) const;
 
   /**
-    Are there local prepared transactions waiting for prepare
-    acknowledge from other members?
-
-   @return  true   yes
-            false  otherwise
-  */
-  bool has_local_prepared_transactions();
-
-  /**
-    Schedule a View_change_log_event log into the relay to after
-    the local prepared transactions are complete, since those
-    transactions belong to the previous view and as such must be
-    logged before this view.
-
-    @param[in]  pevent            the pipeline event that contains
-                                  the View_change_log_event
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int schedule_view_change_event(Pipeline_event *pevent);
-
-  /**
     Inform that plugin did start.
   */
   void plugin_started();
@@ -430,8 +241,6 @@ class Transaction_consistency_manager : public Group_transaction_listener {
   /**
     Inform that plugin is stopping.
     New consistent transactions are not allowed to start.
-    On after_applier_prepare the transactions do not wait
-    for other prepares.
   */
   void plugin_is_stopping();
 
@@ -455,11 +264,17 @@ class Transaction_consistency_manager : public Group_transaction_listener {
 
   int after_rollback(my_thread_id thread_id) override;
 
+  int after_commit(my_thread_id thread_id, rpl_sidno sidno,
+                   rpl_gno gno) override;
+
+
   /**
     Tells the consistency manager that a primary election is running so it
     shall enable primary election checks
   */
   void enable_primary_election_checks();
+
+  bool is_remote_prepare_before_view_change(const rpl_sid *sid, rpl_gno gno);
 
   /**
     Tells the consistency manager that a primary election ended so it
@@ -470,8 +285,7 @@ class Transaction_consistency_manager : public Group_transaction_listener {
  private:
   /**
     Help method called by transaction begin action that, for
-    transactions with consistency GROUP_REPLICATION_CONSISTENCY_BEFORE
-    or GROUP_REPLICATION_CONSISTENCY_BEFORE_AND_AFTER will:
+    transactions with consistency GROUP_REPLICATION_CONSISTENCY_BEFORE will:
       1) send a message to all members;
       2) when that message is received and processed in-order,
          w.r.t. the message stream, will fetch the Group Replication
@@ -493,51 +307,6 @@ class Transaction_consistency_manager : public Group_transaction_listener {
       my_thread_id thread_id,
       enum_group_replication_consistency_level consistency_level,
       ulong timeout) const;
-
-  /**
-    Help method called by transaction begin action that, if there are
-    precedent prepared transactions with consistency
-    GROUP_REPLICATION_CONSISTENCY_AFTER or
-    GROUP_REPLICATION_CONSISTENCY_BEFORE_AND_AFTER, will hold the
-    this transaction until the prepared are committed.
-
-    @param[in]  thread_id         the thread that is executing the
-                                  transaction
-    @param[in]  timeout           maximum time to wait
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int transaction_begin_sync_prepared_transactions(my_thread_id thread_id,
-                                                   ulong timeout);
-
-  /**
-    Help method that cleans prepared transactions and releases
-    transactions waiting on them.
-
-    @param[in]  key               the transaction key
-
-    @return Operation status
-      @retval 0      OK
-      @retval !=0    error
-  */
-  int remove_prepared_transaction(Transaction_consistency_manager_key key);
-
-  Checkable_rwlock *m_map_lock;
-  Transaction_consistency_manager_map m_map;
-
-  Checkable_rwlock *m_prepared_transactions_on_my_applier_lock;
-
-  std::list<Transaction_consistency_manager_key,
-            Malloc_allocator<Transaction_consistency_manager_key>>
-      m_prepared_transactions_on_my_applier;
-  std::list<my_thread_id, Malloc_allocator<my_thread_id>>
-      m_new_transactions_waiting;
-  std::list<Transaction_consistency_manager_pevent_pair,
-            Malloc_allocator<Transaction_consistency_manager_pevent_pair>>
-      m_delayed_view_change_events;
-  Transaction_consistency_manager_key m_last_local_transaction;
 
   std::atomic<bool> m_plugin_stopping;
   std::atomic<bool> m_primary_election_active;

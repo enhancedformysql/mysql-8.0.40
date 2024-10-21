@@ -2654,6 +2654,8 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
       gaq->assigned_group_index = gaq->en_queue(&group);
       DBUG_PRINT("info", ("gaq_idx= %ld  gaq->size=%zu",
                           gaq->assigned_group_index, gaq->capacity));
+      rli->is_wait_last_commited = false;
+      rli->last_commmitted_seq = 0;
       assert(gaq->assigned_group_index != MTS_WORKER_UNDEF);
       assert(gaq->assigned_group_index < gaq->capacity);
       assert(gaq->get_job_group(rli->gaq->assigned_group_index)
@@ -2911,20 +2913,6 @@ Slave_worker *Log_event::get_slave_worker(Relay_log_info *rli) {
 #ifndef NDEBUG
     ptr_group->notified = true;
 #endif
-  }
-
-  /* Notify the worker about new FD */
-  if (!ret_worker->fd_change_notified) {
-    if (!ptr_group)
-      ptr_group = gaq->get_job_group(rli->gaq->assigned_group_index);
-    /*
-      Increment the usage counter on behalf of Worker.
-      This avoids inadvertent FD deletion in a race case where Coordinator
-      would install a next new FD before Worker has noticed the previous one.
-    */
-    ++rli->get_rli_description_event()->atomic_usage_counter;
-    ptr_group->new_fd_event = rli->get_rli_description_event();
-    ret_worker->fd_change_notified = true;
   }
 
   if (ends_group() ||
@@ -3195,7 +3183,9 @@ int Log_event::apply_event(Relay_log_info *rli) {
             applying the incident event..
           */
           int error = apply_gtid_event(rli);
-          if (error) return -1;
+          if (error) {
+            return -1;
+          }
         }
 
 #ifndef NDEBUG
@@ -3268,6 +3258,12 @@ int Log_event::apply_event(Relay_log_info *rli) {
 
   worker =
       (Relay_log_info *)(rli->last_assigned_worker = get_slave_worker(rli));
+
+  if (rli->last_assigned_worker) {
+     rli->last_assigned_worker->is_wait_last_commited = rli->is_wait_last_commited;
+     rli->last_assigned_worker->last_commmitted_seq = rli->last_commmitted_seq;
+  }
+
 
 #ifndef NDEBUG
   if (rli->last_assigned_worker)
@@ -5704,7 +5700,9 @@ int Rotate_log_event::do_update_pos(Relay_log_info *rli) {
         synchronization point. For that reason, the checkpoint
         routine is being called here.
       */
-      if ((error = mta_checkpoint_routine(rli, false))) goto err;
+      if ((error = mta_checkpoint_routine(rli, false))) {
+	      goto err;
+      }
     }
 
     mysql_mutex_lock(&rli->data_lock);
@@ -13285,11 +13283,6 @@ uint32 Gtid_log_event::write_body_to_memory(uchar *buffer) {
     ptr_buffer += ORIGINAL_SERVER_VERSION_LENGTH;
   }
 
-  if (this->commit_group_ticket != binlog::BgcTicket::kTicketUnset) {
-    int8store(ptr_buffer, this->commit_group_ticket);
-    ptr_buffer += COMMIT_GROUP_TICKET_LENGTH;
-  }
-
   return ptr_buffer - buffer;
 }
 
@@ -13416,30 +13409,6 @@ int Gtid_log_event::do_apply_event(Relay_log_info const *rli) {
     assert(!thd->lock);
     DBUG_PRINT("info", ("setting tx_isolation to READ COMMITTED"));
     set_tx_isolation(thd, ISO_READ_COMMITTED, true /*one_shot*/);
-  }
-
-  binlog::BgcTicket bgc_group_ticket(this->commit_group_ticket);
-
-  if (bgc_group_ticket.is_set()) {
-#ifndef NDEBUG
-    if (thd->rpl_thd_ctx.binlog_group_commit_ctx()
-            .get_session_ticket()
-            .is_set()) {
-      assert(
-          !(bgc_group_ticket >
-            thd->rpl_thd_ctx.binlog_group_commit_ctx().get_session_ticket()));
-    }
-#endif
-    /*
-      If the session ticket is already set, this is a transaction retry,
-      as such there is no need to assign the ticket again.
-    */
-    if (thd->rpl_thd_ctx.binlog_group_commit_ctx()
-            .get_session_ticket()
-            .is_set() == false) {
-      thd->rpl_thd_ctx.binlog_group_commit_ctx().set_session_ticket(
-          bgc_group_ticket);
-    }
   }
 
   return 0;

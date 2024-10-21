@@ -79,7 +79,7 @@
 --let $assert_cond= "[SELECT COUNT(*) FROM performance_schema.threads WHERE NAME=\"thread/sql/replica_monitor\"]" = 1;
 --source include/assert.inc
 
-
+--sleep 3
 --echo
 --echo ############################################################
 --echo # 5. Stop group replication on group B

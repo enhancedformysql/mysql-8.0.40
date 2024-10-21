@@ -73,8 +73,7 @@ int Asynchronous_channels_state_observer::thread_start(
    single-primary mode on secondary */
   if (is_plugin_configured_and_starting() &&
       strcmp(param->channel_name, "group_replication_recovery") != 0 &&
-      strcmp(param->channel_name, "group_replication_applier") != 0 &&
-      group_member_mgr && local_member_info->in_primary_mode()) {
+      strcmp(param->channel_name, "group_replication_applier") != 0 && group_member_mgr) {
     std::string m_uuid;
     group_member_mgr->get_primary_member_uuid(m_uuid);
 
@@ -158,7 +157,7 @@ int Asynchronous_channels_state_observer::applier_start(
   if (is_plugin_configured_and_starting() &&
       strcmp(param->channel_name, "group_replication_recovery") != 0 &&
       strcmp(param->channel_name, "group_replication_applier") != 0 &&
-      group_member_mgr && local_member_info->in_primary_mode()) {
+      group_member_mgr) {
     std::string m_uuid;
     group_member_mgr->get_primary_member_uuid(m_uuid);
 
@@ -248,15 +247,6 @@ int Asynchronous_channels_state_observer::applier_log_event(
         out++;
       }
 
-      if (is_plugin_configured_and_starting() &&
-          local_member_info->has_enforces_update_everywhere_checks() &&
-          trans_param->tables_info[table].has_cascade_foreign_key &&
-          !channel_interface.is_own_event_applier(
-              param->thread_id, "group_replication_applier")) {
-        LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_FK_WITH_CASCADE_UNSUPPORTED,
-                     trans_param->tables_info[table].table_name);
-        out++;
-      }
     }
   }
 

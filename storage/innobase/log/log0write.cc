@@ -813,7 +813,7 @@ static inline uint64_t log_max_spins_when_waiting_in_user_thread(
   /* Get high-watermark - when cpu usage is higher, don't spin! */
   const uint32_t hwm = srv_log_spin_cpu_pct_hwm;
 
-  if (srv_cpu_usage.utime_abs < srv_log_spin_cpu_abs_lwm || cpu >= hwm) {
+  if (cpu >= hwm) {
     /* Don't spin because either cpu usage is too high or it's
     almost idle so no reason to bother. */
     max_spins = 0;
@@ -1230,29 +1230,6 @@ struct Log_thread_waiting {
   inline Wait_stats wait(Stop_condition stop_condition) {
     auto spin_delay = m_spin_delay;
     auto min_timeout = m_min_timeout;
-
-    /** We might read older value, it just decides on spinning.
-    Correctness does not depend on this. Only local performance might depend on
-    this but it's anyway heuristic and depends on average which by definition
-    has lag. No reason to make extra barriers here. */
-
-    const auto req_interval =
-        m_log.write_to_file_requests_interval.load(std::memory_order_relaxed);
-
-    if (srv_cpu_usage.utime_abs < srv_log_spin_cpu_abs_lwm ||
-        !log_write_to_file_requests_are_frequent(req_interval)) {
-      /* Either:
-      1. CPU usage is very low on the server, which means the server is most
-         likely idle or almost idle.
-      2. Request to write/flush redo to disk comes only once per 1ms in average
-         or even less often.
-      In both cases we prefer not to spend on CPU power, because there is no
-      real gain from spinning in log threads then. */
-
-      spin_delay = 0;
-      min_timeout = std::min<std::chrono::microseconds>(
-          req_interval, std::chrono::milliseconds{1});
-    }
 
     const auto wait_stats =
         os_event_wait_for(m_event, spin_delay, min_timeout, stop_condition);

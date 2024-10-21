@@ -42,7 +42,6 @@ SET(GROUP_REPLICATION_SOURCES
   src/group_actions/communication_protocol_action.cc
   src/group_actions/group_action.cc
   src/group_actions/group_action_coordinator.cc
-  src/group_actions/multi_primary_migration_action.cc
   src/group_actions/primary_election_action.cc
   src/group_actions/group_actions_transaction_controller.cc
   src/handlers/applier_handler.cc
@@ -60,11 +59,9 @@ SET(GROUP_REPLICATION_SOURCES
   src/perfschema/pfs.cc
   src/perfschema/table_replication_group_configuration_version.cc
   src/perfschema/table_replication_group_member_actions.cc
-  src/perfschema/table_communication_information.cc
   src/pipeline_factory.cc
   src/pipeline_stats.cc
   src/plugin.cc
-  src/plugin_handlers/consensus_leaders_handler.cc
   src/plugin_handlers/group_partition_handling.cc
   src/plugin_handlers/member_actions_handler.cc
   src/plugin_handlers/member_actions_handler_configuration.cc
@@ -85,7 +82,6 @@ SET(GROUP_REPLICATION_SOURCES
   src/plugin_messages/single_primary_message.cc
   src/plugin_messages/sync_before_execution_message.cc
   src/plugin_messages/transaction_message.cc
-  src/plugin_messages/transaction_prepared_message.cc
   src/plugin_messages/transaction_with_guarantee_message.cc
   src/plugin_observers/channel_observation_manager.cc
   src/plugin_observers/group_event_observer.cc
@@ -114,7 +110,6 @@ SET(GROUP_REPLICATION_SOURCES
   src/thread/mysql_thread.cc
   src/udf/udf_communication_protocol.cc
   src/udf/udf_member_actions.cc
-  src/udf/udf_multi_primary.cc
   src/udf/udf_registration.cc
   src/udf/udf_single_primary.cc
   src/udf/udf_utils.cc

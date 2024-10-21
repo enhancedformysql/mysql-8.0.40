@@ -29,37 +29,6 @@ const uint64_t
     Transaction_with_guarantee_message::s_consistency_level_pit_size =
         Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE + 1;
 
-Transaction_with_guarantee_message::Transaction_with_guarantee_message(
-    uint64_t payload_capacity,
-    enum_group_replication_consistency_level consistency_level)
-    : Transaction_message_interface(CT_TRANSACTION_WITH_GUARANTEE_MESSAGE),
-      m_consistency_level(consistency_level) {
-  DBUG_TRACE;
-  assert(m_consistency_level >= GROUP_REPLICATION_CONSISTENCY_AFTER);
-
-  /*
-    Consider the message headers size on the Gcs_message_data capacity.
-  */
-  const uint64_t headers_size =
-      Plugin_gcs_message::WIRE_FIXED_HEADER_SIZE +
-      Plugin_gcs_message::WIRE_PAYLOAD_ITEM_HEADER_SIZE;
-  const uint64_t message_capacity =
-      headers_size + payload_capacity + s_consistency_level_pit_size;
-  m_gcs_message_data = new Gcs_message_data(0, message_capacity);
-
-  std::vector<unsigned char> buffer;
-  encode_header(&buffer);
-  encode_payload_item_type_and_length(&buffer, PIT_TRANSACTION_DATA,
-                                      payload_capacity);
-  assert(buffer.size() == headers_size);
-  m_gcs_message_data->append_to_payload(&buffer.front(), headers_size);
-}
-
-Transaction_with_guarantee_message::~Transaction_with_guarantee_message() {
-  DBUG_TRACE;
-  delete m_gcs_message_data;
-}
-
 bool Transaction_with_guarantee_message::write(const unsigned char *buffer,
                                                my_off_t length) {
   DBUG_TRACE;
@@ -113,25 +82,3 @@ void Transaction_with_guarantee_message::decode_payload(const unsigned char *,
   assert(0);
 }
 
-enum_group_replication_consistency_level
-Transaction_with_guarantee_message::decode_and_get_consistency_level(
-    const unsigned char *buffer, size_t) {
-  DBUG_TRACE;
-
-  // Get first payload item pointer and size.
-  const unsigned char *payload_data = nullptr;
-  size_t payload_size = 0;
-  get_first_payload_item_raw_data(buffer, &payload_data, &payload_size);
-
-  const unsigned char *slider = payload_data + payload_size;
-  uint16 payload_item_type = 0;
-
-  unsigned char consistency_level_aux = 0;
-  decode_payload_item_char(&slider, &payload_item_type, &consistency_level_aux);
-  enum_group_replication_consistency_level consistency_level =
-      static_cast<enum_group_replication_consistency_level>(
-          consistency_level_aux);
-  assert(consistency_level >= GROUP_REPLICATION_CONSISTENCY_AFTER);
-
-  return consistency_level;
-}

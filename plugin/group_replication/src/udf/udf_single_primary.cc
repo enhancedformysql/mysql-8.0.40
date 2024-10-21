@@ -74,13 +74,10 @@ static char *group_replication_set_as_primary(UDF_INIT *, UDF_ARGS *args,
       return result;
     }
   } else {
-    // This case means the group changed to MPM since this UDF was initialized.
-    const char *return_message =
-        "The group is now in multi-primary mode. Use "
-        "group_replication_switch_to_single_primary_mode.";
-    size_t return_length = strlen(return_message);
-    strcpy(result, return_message);
-    *length = return_length;
+    throw_udf_error(
+        "group_replication_set_as_primary",
+        "Unexpected mode here.");
+    *error = 1;
     return result;
   }
 
@@ -204,14 +201,6 @@ static bool group_replication_set_as_primary_init(UDF_INIT *init_id,
     }
   }
 
-  if (local_member_info && !local_member_info->in_primary_mode()) {
-    const char *return_message =
-        "In multi-primary mode."
-        " Use group_replication_switch_to_single_primary_mode.";
-    strcpy(message, return_message);
-    return true;
-  }
-
   if (Charset_service::set_return_value_charset(init_id) ||
       Charset_service::set_args_charset(args))
     return true;
@@ -241,7 +230,7 @@ static char *group_replication_switch_to_single_primary_mode(
   *is_null = 0;  // result is not null
   *error = 0;
 
-  if (local_member_info && local_member_info->in_primary_mode()) {
+  if (local_member_info) {
     const char *return_message;
     if (args->arg_count > 0)
       return_message =

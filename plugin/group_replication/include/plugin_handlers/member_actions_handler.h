@@ -57,10 +57,8 @@ class Member_actions {
       case AFTER_PRIMARY_ELECTION:
         return "AFTER_PRIMARY_ELECTION";
       default:
-        /* purecov: begin inspected */
         assert(0);
         return "";
-        /* purecov: end */
     }
   }
 };

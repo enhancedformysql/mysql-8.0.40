@@ -147,43 +147,6 @@ class Queue_checkpoint_packet : public Action_packet {
 };
 
 /**
-  @class Transaction_prepared_action_packet
-  A packet to inform that a given member did prepare a given transaction.
-*/
-class Transaction_prepared_action_packet : public Packet {
- public:
-  /**
-    Create a new transaction prepared action.
-
-    @param  sid              the prepared transaction sid
-    @param  gno              the prepared transaction gno
-    @param  gcs_member_id    the member id that did prepare the
-                             transaction
-  */
-  Transaction_prepared_action_packet(const rpl_sid *sid, rpl_gno gno,
-                                     const Gcs_member_identifier &gcs_member_id)
-      : Packet(TRANSACTION_PREPARED_PACKET_TYPE),
-        m_sid_specified(sid != nullptr ? true : false),
-        m_gno(gno),
-        m_gcs_member_id(gcs_member_id.get_member_id()) {
-    if (sid != nullptr) {
-      m_sid.copy_from(*sid);
-    }
-  }
-
-  ~Transaction_prepared_action_packet() override = default;
-
-  const bool m_sid_specified;
-  const rpl_gno m_gno;
-  const Gcs_member_identifier m_gcs_member_id;
-
-  const rpl_sid *get_sid() { return m_sid_specified ? &m_sid : nullptr; }
-
- private:
-  rpl_sid m_sid;
-};
-
-/**
   @class Sync_before_execution_action_packet
   A packet to request a synchronization point on the global message
   order on a given member before transaction execution.
@@ -244,6 +207,7 @@ class Applier_module_interface {
   virtual int wait_for_applier_complete_suspension(
       bool *abort_flag, bool wait_for_execution = true) = 0;
   virtual void awake_applier_module() = 0;
+  virtual void tell_applier_abandon_queue() = 0;
   virtual void interrupt_applier_suspension_wait() = 0;
   virtual int wait_for_applier_event_execution(
       double timeout, bool check_and_purge_partial_transactions) = 0;
@@ -260,8 +224,6 @@ class Applier_module_interface {
   virtual void add_view_change_packet(View_change_packet *packet) = 0;
   virtual void add_single_primary_action_packet(
       Single_primary_action_packet *packet) = 0;
-  virtual void add_transaction_prepared_action_packet(
-      Transaction_prepared_action_packet *packet) = 0;
   virtual void add_sync_before_execution_action_packet(
       Sync_before_execution_action_packet *packet) = 0;
   virtual void add_leaving_members_action_packet(
@@ -271,8 +233,8 @@ class Applier_module_interface {
                      std::list<Gcs_member_identifier> *online_members,
                      PSI_memory_key key) = 0;
   virtual int handle_pipeline_action(Pipeline_action *action) = 0;
-  virtual Flow_control_module *get_flow_control_module() = 0;
-  virtual void run_flow_control_step() = 0;
+  virtual Flow_stat_module *get_flow_stat_module() = 0;
+  virtual void run_flow_stat_step() = 0;
   virtual int purge_applier_queue_and_restart_applier_module() = 0;
   virtual bool queue_and_wait_on_queue_checkpoint(
       std::shared_ptr<Continuation> checkpoint_condition) = 0;
@@ -516,18 +478,6 @@ class Applier_module : public Applier_module_interface {
   }
 
   /**
-    Queues a transaction prepared action packet into the applier.
-
-    @note This will happen only after all the previous packets are processed.
-
-    @param[in]  packet              The packet to be queued
-  */
-  void add_transaction_prepared_action_packet(
-      Transaction_prepared_action_packet *packet) override {
-    incoming->push(packet);
-  }
-
-  /**
     Queues a synchronization before execution action packet into the applier.
 
     @note This will happen only after all the previous packets are processed.
@@ -563,6 +513,12 @@ class Applier_module : public Applier_module_interface {
     mysql_mutex_lock(&suspend_lock);
     suspended = false;
     mysql_cond_broadcast(&suspend_cond);
+    mysql_mutex_unlock(&suspend_lock);
+  }
+
+  void tell_applier_abandon_queue() override {
+    mysql_mutex_lock(&suspend_lock);
+    abort_after_suspended = true;
     mysql_mutex_unlock(&suspend_lock);
   }
 
@@ -709,12 +665,12 @@ class Applier_module : public Applier_module_interface {
     return &pipeline_stats_member_collector;
   }
 
-  Flow_control_module *get_flow_control_module() override {
-    return &flow_control_module;
+  Flow_stat_module *get_flow_stat_module() override {
+    return &flow_stat_module;
   }
 
-  void run_flow_control_step() override {
-    flow_control_module.flow_control_step(&pipeline_stats_member_collector);
+  void run_flow_stat_step() override {
+    flow_stat_module.flow_stat_step(&pipeline_stats_member_collector);
   }
 
   bool queue_and_wait_on_queue_checkpoint(
@@ -763,7 +719,7 @@ class Applier_module : public Applier_module_interface {
   */
   int apply_data_packet(Data_packet *data_packet,
                         Format_description_log_event *fde_evt,
-                        Continuation *cont);
+                        Continuation *cont, bool io_buffered);
 
   /**
     Apply an single primary action packet received by the applier.
@@ -775,18 +731,6 @@ class Applier_module : public Applier_module_interface {
       @retval !=0    Error when applying packet
   */
   int apply_single_primary_action_packet(Single_primary_action_packet *packet);
-
-  /**
-    Apply a transaction prepared action packet received by the applier.
-
-    @param packet  the received action packet
-
-    @return the operation status
-      @retval 0      OK
-      @retval !=0    Error when applying packet
-  */
-  int apply_transaction_prepared_action_packet(
-      Transaction_prepared_action_packet *packet);
 
   /**
     Apply a synchronization before execution action packet received
@@ -802,18 +746,6 @@ class Applier_module : public Applier_module_interface {
       Sync_before_execution_action_packet *packet);
 
   /**
-    Apply a leaving members action packet received by the applier.
-
-    @param packet  the received action packet
-
-    @return the operation status
-      @retval 0      OK
-      @retval !=0    Error when applying packet
-  */
-  int apply_leaving_members_action_packet(
-      Leaving_members_action_packet *packet);
-
-  /**
     Suspends the applier module, being transactions still queued in the incoming
     queue.
 
@@ -824,6 +756,7 @@ class Applier_module : public Applier_module_interface {
     mysql_mutex_lock(&suspend_lock);
 
     suspended = true;
+    abort_after_suspended = false;
     stage_handler.set_stage(info_GR_STAGE_module_suspending.m_key, __FILE__,
                             __LINE__, 0, 0);
 
@@ -896,6 +829,7 @@ class Applier_module : public Applier_module_interface {
   mysql_cond_t suspend_cond;
   /* Suspend flag that informs if the applier is suspended */
   bool suspended;
+  bool abort_after_suspended;
 
   /* The condition for signaling the applier suspension*/
   mysql_cond_t suspension_waiting_condition;
@@ -913,7 +847,7 @@ class Applier_module : public Applier_module_interface {
   Applier_channel_state_observer *applier_channel_observer;
 
   Pipeline_stats_member_collector pipeline_stats_member_collector;
-  Flow_control_module flow_control_module;
+  Flow_stat_module flow_stat_module;
   Plugin_stage_monitor_handler stage_handler;
 };
 

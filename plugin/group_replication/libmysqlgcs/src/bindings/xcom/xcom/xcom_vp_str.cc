@@ -24,29 +24,6 @@
 
 #include "xdr_gen/xcom_vp.h"
 
-/* purecov: begin deadcode */
-const char *delivery_status_to_str(delivery_status x) {
-  switch (x) {
-    case delivery_ok:
-      return "delivery_ok";
-    case delivery_failure:
-      return "delivery_failure";
-    default:
-      return "???";
-  }
-}
-
-const char *cons_type_to_str(cons_type x) {
-  switch (x) {
-    case cons_majority:
-      return "cons_majority";
-    case cons_all:
-      return "cons_all";
-    default:
-      return "???";
-  }
-}
-
 const char *cargo_type_to_str(cargo_type x) {
   switch (x) {
     case unified_boot_type:
@@ -93,12 +70,8 @@ const char *cargo_type_to_str(cargo_type x) {
       return "get_synode_app_data_type";
     case convert_into_local_server_type:
       return "convert_into_local_server_type";
-    case set_max_leaders:
-      return "set_max_leaders";
-    case set_leaders_type:
-      return "set_leaders_type";
-    case get_leaders_type:
-      return "get_leaders_type";
+    case set_notify_truly_remove:
+      return "set_notify_truly_remove";
     default:
       return "???";
   }
@@ -167,10 +140,6 @@ const char *pax_op_to_str(pax_op x) {
       return "xcom_client_reply";
     case tiny_learn_op:
       return "tiny_learn_op";
-    case synode_request:
-      return "synode_request";
-    case synode_allocated:
-      return "synode_allocated";
     case LAST_OP:
       return "LAST_OP";
     default:
@@ -199,8 +168,6 @@ const char *client_reply_code_to_str(client_reply_code x) {
       return "REQUEST_FAIL";
     case REQUEST_RETRY:
       return "REQUEST_RETRY";
-    case REQUEST_REDIRECT:
-      return "REQUEST_REDIRECT";
     default:
       return "???";
   }
@@ -228,10 +195,7 @@ const char *xcom_proto_to_str(xcom_proto x) {
       return "x_1_7";
     case x_1_8:
       return "x_1_8";
-    case x_1_9:
-      return "x_1_9";
     default:
       return "???";
   }
 }
-/* purecov: end */

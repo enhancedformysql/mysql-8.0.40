@@ -231,7 +231,7 @@ std::unique_ptr<Network_connection> Xcom_network_provider::open_connection(
   if (Xcom_network_provider_library::timed_connect_msec(
           fd.val, addr->ai_addr, addr->ai_addrlen, connection_timeout) == -1) {
     fd.funerr = to_errno(GET_OS_ERR);
-    G_DEBUG(
+    G_INFO(
         "Connecting socket to address %s in port %d failed with error "
         "%d-%s.",
         address.c_str(), port, fd.funerr,
@@ -241,6 +241,7 @@ std::unique_ptr<Network_connection> Xcom_network_provider::open_connection(
   }
   {
     int peer = 0;
+    int same_ip;
     /* Sanity check before return */
     SET_OS_ERR(0);
 
@@ -251,12 +252,20 @@ std::unique_ptr<Network_connection> Xcom_network_provider::open_connection(
         xcom_getpeername(fd.val, (struct sockaddr *)&another_addr, &addr_size);
     ret.funerr = to_errno(GET_OS_ERR);
     if (peer >= 0) {
+      if (!check_tcp_connection_valid(fd.val, &same_ip)) {
+        this->close_connection({fd.val
+#ifndef XCOM_WITHOUT_OPENSSL
+        , nullptr
+#endif
+        });
+        goto end;
+      }
+
       ret = set_nodelay(fd.val);
       if (ret.val < 0) {
         this->close_connection({fd.val
 #ifndef XCOM_WITHOUT_OPENSSL
-                                ,
-                                nullptr
+         , nullptr
 #endif
         });
 #if defined(_WIN32)
@@ -316,8 +325,6 @@ std::unique_ptr<Network_connection> Xcom_network_provider::open_connection(
       if (ret.val != SSL_SUCCESS) {
         G_INFO("Error connecting using SSL %d %d", ret.funerr,
                SSL_get_error(ssl, ret.val));
-        task_dump_err(ret.funerr);
-
         this->close_connection({fd.val
 #ifndef XCOM_WITHOUT_OPENSSL
                                 ,
@@ -331,7 +338,6 @@ std::unique_ptr<Network_connection> Xcom_network_provider::open_connection(
       if (Xcom_network_provider_ssl_library::ssl_verify_server_cert(
               ssl, address.c_str())) {
         G_MESSAGE("Error validating certificate and peer.");
-        task_dump_err(ret.funerr);
         this->close_connection({fd.val
 #ifndef XCOM_WITHOUT_OPENSSL
                                 ,

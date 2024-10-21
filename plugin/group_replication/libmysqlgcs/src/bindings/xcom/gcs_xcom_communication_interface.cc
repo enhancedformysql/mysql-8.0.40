@@ -57,12 +57,11 @@
 using std::map;
 
 Gcs_xcom_communication::Gcs_xcom_communication(
-    Gcs_xcom_statistics_updater *stats, Gcs_xcom_proxy *proxy,
+    Gcs_xcom_proxy *proxy,
     Gcs_xcom_view_change_control_interface *view_control,
     Gcs_xcom_engine *gcs_engine, Gcs_group_identifier const &group_id,
     std::unique_ptr<Network_provider_management_interface> comms_mgmt)
     : event_listeners(),
-      stats(stats),
       m_xcom_proxy(proxy),
       m_view_control(view_control),
       m_msg_pipeline(),
@@ -77,11 +76,6 @@ Gcs_xcom_communication::Gcs_xcom_communication(
 }
 
 Gcs_xcom_communication::~Gcs_xcom_communication() = default;
-
-std::map<int, const Gcs_communication_event_listener &>
-    *Gcs_xcom_communication::get_event_listeners() {
-  return &event_listeners;
-}
 
 enum_gcs_error Gcs_xcom_communication::send_message(
     const Gcs_message &message_to_send) {
@@ -105,10 +99,6 @@ enum_gcs_error Gcs_xcom_communication::send_message(
 
   message_result = this->do_send_message(message_to_send, &message_length,
                                          Cargo_type::CT_USER_DATA);
-
-  if (message_result == GCS_OK) {
-    this->stats->update_message_sent(message_length);
-  }
 
   return message_result;
 }
@@ -212,9 +202,6 @@ void Gcs_xcom_communication::notify_received_message(
     ++callback_it;
   }
 
-  stats->update_message_received(
-      (long)(message->get_message_data().get_header_length() +
-             message->get_message_data().get_payload_length()));
   MYSQL_GCS_LOG_TRACE("Delivered message from origin= %s",
                       message->get_origin().get_member_id().c_str())
 }
@@ -310,8 +297,7 @@ Gcs_xcom_communication::process_recovered_packet(
   std::memcpy(data.get(), recovered_data.data.data_val, data_len);
   // Create the packet.
   packet = Gcs_packet::make_incoming_packet(
-      std::move(data), data_len, recovered_data.synode, recovered_data.origin,
-      m_msg_pipeline);
+      std::move(data), data_len, recovered_data.synode, m_msg_pipeline);
 
   /*
    The packet should always be a user data packet, but rather than asserting
@@ -521,16 +507,22 @@ Gcs_message *Gcs_xcom_communication::convert_packet_to_message(
    Decode the incoming packet into the message.
    */
   message_data = new Gcs_message_data(packet_in.get_payload_length());
-  if (message_data->decode(packet_in.get_payload_pointer(),
-                           packet_in.get_payload_length())) {
-    /* purecov: begin inspected */
-    delete message_data;
-    MYSQL_GCS_LOG_WARN("Discarding message. Unable to decode it.");
+  if (message_data) {
+    if (message_data->decode(packet_in.get_payload_pointer(),
+                             packet_in.get_payload_length())) {
+      /* purecov: begin inspected */
+      delete message_data;
+      MYSQL_GCS_LOG_WARN("Discarding message. Unable to decode it.");
+      goto end;
+      /* purecov: end */
+    }
+  } else {
+    MYSQL_GCS_LOG_WARN("The pointer of message_data is nil.");
     goto end;
-    /* purecov: end */
   }
+
   // Get packet origin.
-  packet_synode = packet_in.get_origin_synode();
+  packet_synode = packet_in.get_delivery_synode();
   node = xcom_nodes->get_node(packet_synode.get_synod().node);
   origin = Gcs_member_identifier(node->get_member_id());
   intf = static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());

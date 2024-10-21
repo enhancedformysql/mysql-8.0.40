@@ -41,24 +41,8 @@
 #include "xcom/xcom_memory.h"
 #include "xdr_gen/xcom_vp.h"
 
-/* purecov: begin deadcode */
-node_set bit_set_to_node_set(bit_set *set, u_int n) {
-  node_set new_set;
-  alloc_node_set(&new_set, n);
-  {
-    u_int i;
-    IFDBG(D_NONE, FN; STRLIT("bit_set_to_node_set "); dbg_bitset(set, n););
-    for (i = 0; i < n; i++) {
-      new_set.node_set_val[i] = BIT_ISSET(i, set);
-    }
-  }
-  return new_set;
-}
-
-/* purecov: end */
-
 node_set *alloc_node_set(node_set *set, u_int n) {
-  set->node_set_val = (int *)xcom_calloc((size_t)n, sizeof(bool_t));
+  set->node_set_val = (int *)calloc((size_t)n, sizeof(bool_t));
   set->node_set_len = n;
   return set;
 }
@@ -119,58 +103,12 @@ node_set clone_node_set(node_set set) {
   return new_set;
 }
 
-/**
-   Debug a node set.
- */
-/* purecov: begin deadcode */
-char *_dbg_node_set(node_set set, const char *name) {
-  u_int i;
-  GET_NEW_GOUT;
-  STRLIT(name);
-  STRLIT(" ");
-  NDBG(set.node_set_len, u);
-  PTREXP(set.node_set_val);
-  for (i = 0; i < set.node_set_len; i++) {
-    NPUT(set.node_set_val[i], d);
-  }
-  RET_GOUT;
-}
-/* purecov: end */
-/* Add all nodes */
-
 node_set *set_node_set(node_set *set) {
   u_int i;
   for (i = 0; set && i < set->node_set_len; i++) {
     set->node_set_val[i] = TRUE;
   }
   return set;
-}
-
-/* purecov: begin deadcode */
-/* Reset a node set */
-node_set *reset_node_set(node_set *set) {
-  u_int i;
-  for (i = 0; set && i < set->node_set_len; i++) {
-    set->node_set_val[i] = FALSE;
-  }
-  return set;
-}
-
-#ifdef XCOM_STANDALONE
-/**
-   Debug a node set with G_MESSAGE.
- */
-void _g_dbg_node_set(node_set set, const char *name [[maybe_unused]]) {
-  u_int n = 2 * set.node_set_len + 1;
-  char *s = (char *)xcom_calloc((size_t)n, (size_t)1);
-  u_int i;
-  for (i = 0; i < set.node_set_len; i++) {
-    s[i * 2] = set.node_set_val[i] ? '1' : '0';
-    s[i * 2 + 1] = ' ';
-  }
-  s[n - 1] = 0;
-  G_INFO("%s : Node set %s ", name, s);
-  free(s);
 }
 
 /* Count number of nodes in set */
@@ -203,7 +141,6 @@ bool_t is_full_node_set(node_set set) {
   }
   return TRUE;
 }
-#endif
 
 /* Return true if equal node sets */
 
@@ -217,14 +154,6 @@ bool_t equal_node_set(node_set x, node_set y) {
 }
 /* purecov: end */
 
-// Test for equality
-bool equal_node_set(node_set const *x, node_set const *y) {
-  if (x->node_set_len != y->node_set_len) return false;
-  for (u_int i = 0; i < x->node_set_len; i++) {
-    if (x->node_set_val[i] != y->node_set_val[i]) return false;
-  }
-  return true;
-}
 /* Return true if node i is in set */
 
 bool_t is_set(node_set set, node_no i) {
@@ -235,17 +164,7 @@ bool_t is_set(node_set set, node_no i) {
   }
 }
 
-/* purecov: begin deadcode */
-/* Add node to set */
-void add_node(node_set set, node_no node) {
-  if (node < set.node_set_len) {
-    set.node_set_val[node] = TRUE;
-  }
-}
-
-#ifdef XCOM_STANDALONE
 /* Remove node from set */
-
 void remove_node(node_set set, node_no node) {
   if (node < set.node_set_len) {
     set.node_set_val[node] = FALSE;
@@ -253,7 +172,6 @@ void remove_node(node_set set, node_no node) {
 }
 
 /* AND operation, return result in x */
-
 void and_node_set(node_set *x, node_set const *y) {
   u_int i;
   for (i = 0; i < x->node_set_len && i < y->node_set_len; i++) {
@@ -286,5 +204,3 @@ void not_node_set(node_set *x, node_set const *y) {
   }
 }
 
-/* purecov: end */
-#endif

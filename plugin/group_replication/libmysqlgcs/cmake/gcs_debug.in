@@ -28,12 +28,6 @@
 
 #include "xcom/x_platform.h"
 
-#ifdef TASK_DBUG_ON
-#error "TASK_DBUG_ON already defined"
-#else
-#define TASK_DBUG_ON 0
-#endif
-
 #define TX_FMT "{" SY_FMT_DEF " %" PRIu32 "}"
 #define TX_MEM(x) SY_MEM((x).cfg), (x).pc
 
@@ -41,10 +35,6 @@
 #include <stdlib.h>
 
 double task_now();
-
-#ifdef DBGOUT
-#error "DBGOUT defined"
-#endif
 
 #include "xcom/xcom_logger.h"
 
@@ -156,18 +146,6 @@ char *mystrcat_sprintf(char *dest, int *size, const char *format, ...)
 #define G_TRACE(...) G_DEBUG_LEVEL(XCOM_DEBUG_TRACE, __VA_ARGS__)
 #define IS_XCOM_DEBUG_WITH(level) xcom_debug_check(level)
 
-#ifdef IDENTIFY
-#error "IDENTIFY already defined!"
-#else
-#define IDENTIFY
-#endif
-
-#ifdef DBG_IDENTIFY
-#error "DBG_IDENTIFY already defined!"
-#else
-#define DBG_IDENTIFY
-#endif
-
 #define BIT(n) (1L << n)
 
 enum xcom_dbg_type {
@@ -229,56 +207,6 @@ static inline void pop_dbg() {
   } while (0)
 #endif
 
-#if TASK_DBUG_ON
-
-#define DBGOUT(x)                               \
-  do {                                          \
-    if (IS_XCOM_DEBUG_WITH(XCOM_DEBUG_TRACE)) { \
-      GET_GOUT;                                 \
-      ADD_F_GOUT("%f ", task_now());            \
-      x;                                        \
-      PRINT_GOUT;                               \
-      FREE_GOUT;                                \
-    }                                           \
-  } while (0)
-#define NEW_DBG(x)           \
-  long dbg_save = get_dbg(); \
-  set_dbg(x)
-#define RESTORE_DBG set_dbg(dbg_save)
-
-#ifdef IFDBG
-#error "IFDBG already defined!"
-#else
-#define IFDBG(mask, body)           \
-  {                                 \
-    if (do_dbg(mask)) DBGOUT(body); \
-  }
-#endif
-
-#ifdef DBGOUT_ASSERT
-#error "DBGOUT_ASSERT already defined"
-#else
-#define DBGOUT_ASSERT(expr, dbginfo) \
-  if (!(expr)) {                     \
-    GET_GOUT;                        \
-    FN;                              \
-    dbginfo;                         \
-    PRINT_LOUT(XCOM_LOG_ERROR);      \
-    FREE_GOUT;                       \
-    abort();                         \
-  }
-#endif
-
-#else
-
-#define DBGOUT(x) \
-  do {            \
-  } while (0)
-#define DBGOUT_ASSERT(expr, dbginfo)
-#define NEW_DBG(x)
-#define IFDBG(mask, body)
-#endif
-
 #include <sys/types.h>
 #ifndef _WIN32
 #include <unistd.h>
@@ -315,12 +243,6 @@ extern uint32_t get_my_xcom_id();
 #define STREXP(x) ADD_F_GOUT(#x ": %s ", x)
 #define STRLIT(x) ADD_GOUT(x)
 #define NPUT(x, f) ADD_F_GOUT("%" #f " ", x)
-#define NDBG(x, f)      \
-  ADD_F_GOUT(#x " = "); \
-  NPUT(x, f)
-#define NDBG64(x)       \
-  ADD_F_GOUT(#x " = "); \
-  NPUT64(x);
 #define NPUT64(x) ADD_F_GOUT("%" PRIu64 " ", x)
 #define NEXP(x, f) ADD_F_GOUT(#x ": %" #f " ", x)
 #define NUMEXP(x) NEXP(x, d)

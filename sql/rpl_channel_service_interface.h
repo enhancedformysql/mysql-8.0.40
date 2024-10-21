@@ -307,7 +307,7 @@ int channel_add_executed_gtids_to_received_gtids(const char *channel);
     @retval != 0   Error on queue
 */
 int channel_queue_packet(const char *channel, const char *buf,
-                         unsigned long len);
+                         unsigned long len, bool io_buffered);
 
 /**
   Checks if all the queued transactions were executed.

@@ -26,10 +26,6 @@ SET @@GLOBAL.group_replication_auto_increment_increment= default;
 --error ER_WRONG_VALUE_FOR_VAR
 SET @@GLOBAL.group_replication_compression_threshold= default;
 --error ER_WRONG_VALUE_FOR_VAR
-SET @@GLOBAL.group_replication_single_primary_mode= default;
---error ER_WRONG_VALUE_FOR_VAR
-SET @@GLOBAL.group_replication_enforce_update_everywhere_checks= default;
---error ER_WRONG_VALUE_FOR_VAR
 SET @@GLOBAL.group_replication_group_name= default;
 --error ER_WRONG_VALUE_FOR_VAR
 SET @@GLOBAL.group_replication_gtid_assignment_block_size= default;
@@ -45,7 +41,6 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 --let $saved_gr_bootstrap_group = `SELECT @@GLOBAL.group_replication_bootstrap_group;`
 --let $saved_gr_components_stop_timeout = `SELECT @@GLOBAL.group_replication_components_stop_timeout;`
 --let $saved_gr_compression_threshold = `SELECT @@GLOBAL.group_replication_compression_threshold;`
---let $saved_gr_enforce_update_everywhere_checks = `SELECT @@GLOBAL.group_replication_enforce_update_everywhere_checks;`
 --let $saved_gr_force_members = `SELECT @@GLOBAL.group_replication_force_members;`
 --let $saved_gr_group_name = `SELECT @@GLOBAL.group_replication_group_name;`
 --let $saved_gr_gtid_assignment_block_size = `SELECT @@GLOBAL.group_replication_gtid_assignment_block_size;`
@@ -65,7 +60,6 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 --let $saved_gr_recovery_ssl_key = `SELECT @@GLOBAL.group_replication_recovery_ssl_key;`
 --let $saved_gr_recovery_ssl_verify_server_cert = `SELECT @@GLOBAL.group_replication_recovery_ssl_verify_server_cert;`
 --let $saved_gr_recovery_use_ssl = `SELECT @@GLOBAL.group_replication_recovery_use_ssl;`
---let $saved_gr_single_primary_mode = `SELECT @@GLOBAL.group_replication_single_primary_mode;`
 --let $saved_gr_ssl_mode = `SELECT @@GLOBAL.group_replication_ssl_mode;`
 --let $saved_gr_start_on_boot = `SELECT @@GLOBAL.group_replication_start_on_boot;`
 --let $saved_gr_transaction_size_limit = `SELECT @@GLOBAL.group_replication_transaction_size_limit;`
@@ -88,10 +82,9 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 --let $saved_gr_advertise_recovery_endpoints = `SELECT @@GLOBAL.group_replication_advertise_recovery_endpoints;`
 --let $saved_gr_view_change_uuid = `SELECT @@GLOBAL.group_replication_view_change_uuid;`
 --let $saved_gr_communication_stack = `SELECT @@GLOBAL.group_replication_communication_stack;`
---let $saved_gr_paxos_single_leader = `SELECT @@GLOBAL.group_replication_paxos_single_leader;`
 
 # Total number of GR variables.
---let $total_gr_vars= 61
+--let $total_gr_vars= 51
 
 --echo #
 --echo # Test Unit#1
@@ -110,10 +103,6 @@ SET @@GLOBAL.group_replication_communication_max_message_size= default;
 SET @@GLOBAL.group_replication_auto_increment_increment= default;
 --error ER_WRONG_VALUE_FOR_VAR
 SET @@GLOBAL.group_replication_compression_threshold= default;
---error ER_WRONG_VALUE_FOR_VAR
-SET @@GLOBAL.group_replication_single_primary_mode= default;
---error ER_WRONG_VALUE_FOR_VAR
-SET @@GLOBAL.group_replication_enforce_update_everywhere_checks= default;
 --error ER_WRONG_VALUE_FOR_VAR
 SET @@GLOBAL.group_replication_group_name= default;
 --error ER_WRONG_VALUE_FOR_VAR
@@ -161,7 +150,6 @@ SET @@GLOBAL.group_replication_recovery_tls_ciphersuites= default;
 SET @@GLOBAL.group_replication_advertise_recovery_endpoints = default;
 SET @@GLOBAL.group_replication_view_change_uuid= default;
 SET @@GLOBAL.group_replication_communication_stack = default;
-SET @@GLOBAL.group_replication_paxos_single_leader = default;
 
 # Session variables
 SET @@SESSION.group_replication_consistency= default;
@@ -341,8 +329,8 @@ SET @@SESSION.group_replication_consistency= default;
 --source include/assert.inc
 
 # group_replication_communication_max_message_size
---let $assert_text= Default group_replication_communication_max_message_size is 10485760
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_max_message_size]" = 10485760
+--let $assert_text= Default group_replication_communication_max_message_size is 1048576
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_max_message_size]" = 1048576
 --source include/assert.inc
 
 #group_replication_autorejoin_tries
@@ -391,12 +379,6 @@ SET @@SESSION.group_replication_consistency= default;
 --let $assert_cond= "[SELECT @@GLOBAL.group_replication_communication_stack]" = "XCom"
 --source include/assert.inc
 
-# group_replication_paxos_single_leader
---let $assert_text= Default group_replication_paxos_single_leader is 0
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_paxos_single_leader]" = 0
---source include/assert.inc
-
-
 --echo #
 --echo # Clean up
 --echo #
@@ -409,8 +391,6 @@ SET @@SESSION.group_replication_consistency= default;
 --eval SET @@GLOBAL.group_replication_bootstrap_group= $saved_gr_bootstrap_group
 --eval SET @@GLOBAL.group_replication_components_stop_timeout= $saved_gr_components_stop_timeout
 --eval SET @@GLOBAL.group_replication_compression_threshold= $saved_gr_compression_threshold
---eval SET @@GLOBAL.group_replication_single_primary_mode= $saved_gr_single_primary_mode
---eval SET @@GLOBAL.group_replication_enforce_update_everywhere_checks= $saved_gr_enforce_update_everywhere_checks
 --eval SET @@GLOBAL.group_replication_force_members= "$saved_gr_force_members"
 --eval SET @@GLOBAL.group_replication_group_name= "$saved_gr_group_name"
 --eval SET @@GLOBAL.group_replication_gtid_assignment_block_size= $saved_gr_gtid_assignment_block_size
@@ -452,7 +432,6 @@ SET @@SESSION.group_replication_consistency= default;
 --eval SET @@GLOBAL.group_replication_advertise_recovery_endpoints= "$saved_gr_advertise_recovery_endpoints"
 --eval SET @@GLOBAL.group_replication_view_change_uuid= "$saved_gr_view_change_uuid"
 --eval SET @@GLOBAL.group_replication_communication_stack= "$saved_gr_communication_stack"
---eval SET @@GLOBAL.group_replication_paxos_single_leader= $saved_gr_paxos_single_leader
 --enable_query_log
 
 --let $total_gr_vars=

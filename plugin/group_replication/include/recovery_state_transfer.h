@@ -85,6 +85,10 @@ class Recovery_state_transfer {
     donor_reconnect_interval = reconnect_interval;
   }
 
+  void set_donor_threshold(ulonglong donor_threshold_value) {
+    donor_threshold = donor_threshold_value;
+  }
+
   /**
     Sets all the SSL option to use on recovery.
 
@@ -456,6 +460,7 @@ class Recovery_state_transfer {
   long max_connection_attempts_to_donors;
   /* Sleep time between connection attempts to all possible donors*/
   long donor_reconnect_interval;
+  ulonglong donor_threshold;
   /* compression algorithm to be used for communication */
   char recovery_compression_algorithm[COMPRESSION_ALGORITHM_NAME_LENGTH_MAX];
   /* compression level to be used for compression */

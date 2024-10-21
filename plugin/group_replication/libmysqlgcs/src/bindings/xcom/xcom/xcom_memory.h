@@ -26,7 +26,6 @@
 
 #include <rpc/types.h>
 #include <rpc/xdr.h>
-#include <stdlib.h>
 
 #define X_FREE(x) \
   {               \

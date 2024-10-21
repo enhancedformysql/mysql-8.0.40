@@ -77,9 +77,6 @@ if ($until_type == 'BEFORE_GTIDS')
 
 eval START SLAVE SQL_THREAD UNTIL $__until_clause;
 
---let $wait_condition= SELECT count(*) = 1 FROM information_schema.processlist WHERE state = "Waiting for workers to exit" OR state = "Waiting for Replica Worker to release partition"
---source include/wait_condition.inc
-
 --let $rpl_connection_name= server_2
 --source include/rpl_connection.inc
 ROLLBACK;

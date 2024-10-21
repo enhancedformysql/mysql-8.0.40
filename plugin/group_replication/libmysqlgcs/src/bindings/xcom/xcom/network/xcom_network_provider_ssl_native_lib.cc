@@ -218,15 +218,6 @@ static long process_tls_version(const char *tls_version) {
     return tls_ctx_flag;
 }
 
-/* purecov: begin deadcode */
-static int PasswordCallBack(char *passwd, int sz, int rw [[maybe_unused]],
-                            void *userdata [[maybe_unused]]) {
-  const char *pw = ssl_pw ? ssl_pw : "yassl123";
-  strncpy(passwd, pw, (size_t)sz);
-  return (int)strlen(pw);
-}
-/* purecov: end */
-
 static int configure_ssl_algorithms(SSL_CTX *ssl_ctx, const char *cipher,
                                     const char *tls_version,
                                     const char *tls_ciphersuites
@@ -239,7 +230,6 @@ static int configure_ssl_algorithms(SSL_CTX *ssl_ctx, const char *cipher,
   int tlsv1_3_enabled = 0;
 #endif /* HAVE_TLSv13 */
 
-  SSL_CTX_set_default_passwd_cb(ssl_ctx, PasswordCallBack);
   SSL_CTX_set_session_cache_mode(ssl_ctx, SSL_SESS_CACHE_OFF);
 
   ssl_ctx_flags = process_tls_version(tls_version);

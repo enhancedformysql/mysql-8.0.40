@@ -73,9 +73,8 @@ void Blocked_transaction_handler::unblock_waiting_transactions() {
 
 void log_primary_member_details() {
   // Special case to display Primary member details in secondary member logs.
-  if (local_member_info->in_primary_mode() &&
-      (local_member_info->get_role() ==
-       Group_member_info::MEMBER_ROLE_SECONDARY)) {
+  if (local_member_info->get_role() ==
+       Group_member_info::MEMBER_ROLE_SECONDARY) {
     std::string primary_member_uuid;
     group_member_mgr->get_primary_member_uuid(primary_member_uuid);
     Group_member_info primary_member_info;

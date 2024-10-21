@@ -78,6 +78,7 @@ class Plugin_gcs_events_handler : public Gcs_communication_event_listener,
   Gcs_message_data *get_exchangeable_data() const override;
   void on_suspicions(
       const std::vector<Gcs_member_identifier> &members,
+      const std::vector<Gcs_member_identifier *> &left_members,
       const std::vector<Gcs_member_identifier> &unreachable) const override;
 
   /**
@@ -103,7 +104,6 @@ class Plugin_gcs_events_handler : public Gcs_communication_event_listener,
   void handle_transactional_message(const Gcs_message &message) const;
   void handle_transactional_with_guarantee_message(
       const Gcs_message &message) const;
-  void handle_transaction_prepared_message(const Gcs_message &message) const;
   void handle_sync_before_execution_message(const Gcs_message &message) const;
   void handle_certifier_message(const Gcs_message &message) const;
   void handle_recovery_message(Plugin_gcs_message *message) const;

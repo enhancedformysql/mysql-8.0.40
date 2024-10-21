@@ -267,8 +267,7 @@ bool Member_actions_handler::propagate_serialized_configuration(
   if (!plugin_is_group_replication_running()) {
     return false; /* purecov: inspected */
   }
-  assert(local_member_info->in_primary_mode() &&
-         local_member_info->get_role() ==
+  assert(local_member_info->get_role() ==
              Group_member_info::MEMBER_ROLE_PRIMARY);
 
   bool error = m_group_replication_message_service_send->send(
@@ -294,7 +293,6 @@ std::pair<bool, std::string> Member_actions_handler::disable_action(
 void Member_actions_handler::trigger_actions(
     Member_actions::enum_action_event event) {
   DBUG_TRACE;
-  assert(local_member_info->in_primary_mode());
 
   Mysql_thread_task *task =
       new Mysql_thread_task(this, new Member_actions_trigger_parameters(event));
@@ -304,7 +302,6 @@ void Member_actions_handler::trigger_actions(
 
 void Member_actions_handler::run(Mysql_thread_body_parameters *parameters) {
   DBUG_TRACE;
-  assert(local_member_info->in_primary_mode());
 
   // Identify the event.
   Member_actions_trigger_parameters *trigger_parameters =
@@ -368,8 +365,7 @@ int Member_actions_handler::run_internal_action(
   DBUG_TRACE;
   int error = 0;
   const bool im_the_primary =
-      (local_member_info->in_primary_mode() &&
-       local_member_info->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY);
+      (local_member_info->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY);
 
   if (action.name() == "mysql_disable_super_read_only_if_primary") {
     if (im_the_primary) {

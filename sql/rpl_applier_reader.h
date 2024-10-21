@@ -156,6 +156,8 @@ class Rpl_applier_reader {
   */
   bool wait_for_new_event();
 
+  void wait_for_replay_complete();
+
   /**
      It checks if the relaylog file reader should be reopened and then reopens
      the reader if receiver thread truncated some data from active relay log.

@@ -94,7 +94,6 @@ int Primary_election_handler::execute_primary_election(
   }
 
   bool has_primary_changed;
-  bool in_primary_mode;
   Group_member_info primary_member_info;
   bool primary_member_info_not_found = true;
   Group_member_info_list *all_members_info =
@@ -147,10 +146,8 @@ int Primary_election_handler::execute_primary_election(
     goto end;
   }
 
-  in_primary_mode = local_member_info->in_primary_mode();
   has_primary_changed = Group_member_info::MEMBER_ROLE_PRIMARY !=
-                            primary_member_info.get_role() ||
-                        !in_primary_mode;
+                            primary_member_info.get_role();
   if (has_primary_changed) {
     /*
       We change roles when elections are just starting.
@@ -264,10 +261,6 @@ int Primary_election_handler::internal_primary_election(
 
   Group_member_info_list *members_info = group_member_mgr->get_all_members();
 
-  /* Declare at this point that all members are in primary mode for switch
-   * cases*/
-  group_member_mgr->update_primary_member_flag(true);
-
   if (!local_member_info->get_uuid().compare(primary_to_elect)) {
     notify_election_running();
     primary_election_handler.launch_primary_election_process(
@@ -378,7 +371,7 @@ bool Primary_election_handler::pick_primary_member(
 #endif
 
     Group_member_info *member = *it;
-    if (local_member_info->in_primary_mode() && the_primary == nullptr &&
+    if (the_primary == nullptr &&
         member->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY) {
       the_primary = member;
 #ifndef NDEBUG
@@ -498,12 +491,25 @@ void sort_members_for_election(
   Member_version lowest_version = first_member->get_member_version();
 
   // sort only lower version members as they only will be needed to pick leader
-  if (lowest_version >= PRIMARY_ELECTION_MEMBER_WEIGHT_VERSION)
-    std::sort(all_members_info->begin(), lowest_version_end,
-              Group_member_info::comparator_group_member_weight);
-  else
+  if (lowest_version >= PRIMARY_ELECTION_MEMBER_WEIGHT_VERSION) {
+    ulong primary_election_mode = get_single_primary_election_mode_var();
+    if (primary_election_mode != PEM_WEIGHT_ONLY) {
+      if (primary_election_mode == PEM_GTID_FIRST) {
+        std::sort(
+            all_members_info->begin(), lowest_version_end,
+            Group_member_info::comparator_group_member_executed_gtid_first);
+      } else {
+        std::sort(all_members_info->begin(), lowest_version_end,
+                  Group_member_info::comparator_group_member_weight_first);
+      }
+    } else {
+      std::sort(all_members_info->begin(), lowest_version_end,
+                Group_member_info::comparator_group_member_weight);
+    }
+  } else {
     std::sort(all_members_info->begin(), lowest_version_end,
               Group_member_info::comparator_group_member_uuid);
+  }
 }
 
 void Primary_election_handler::notify_election_running() {

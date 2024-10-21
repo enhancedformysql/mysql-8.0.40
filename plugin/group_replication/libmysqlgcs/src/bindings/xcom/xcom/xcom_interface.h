@@ -28,8 +28,7 @@
 #include "xcom/xcom_cache.h"
 
 void deliver_view_msg(site_def const *site);
-void deliver_global_view_msg(site_def const *site, node_set const ns,
-                             synode_no message_id);
+void deliver_global_view_msg(site_def const *site, synode_no message_id);
 
 /**
   Delivers the @c app payload to XCom's upper layer, e.g. GCS.
@@ -64,9 +63,5 @@ void deliver_global_view_msg(site_def const *site, node_set const ns,
  */
 void deliver_to_app(pax_machine *pma, app_data_ptr app,
                     delivery_status app_status);
-
-void deliver_config(app_data_ptr a);
-
-void deinit_xcom_interface();
 
 #endif

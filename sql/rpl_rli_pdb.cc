@@ -277,6 +277,8 @@ Slave_worker::Slave_worker(Relay_log_info *rli,
   checkpoint_relay_log_name[0] = 0;
   checkpoint_master_log_name[0] = 0;
 
+  is_wait_last_commited = false;
+
   mysql_mutex_init(key_mutex_slave_parallel_worker, &jobs_lock,
                    MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_cond_slave_parallel_worker, &jobs_cond);
@@ -1266,8 +1268,6 @@ void Slave_worker::slave_worker_ends_group(Log_event *ev, int error) {
     */
     Mts_submode_logical_clock *mts_submode =
         static_cast<Mts_submode_logical_clock *>(c_rli->current_mts_submode);
-    int64 min_child_waited_logical_ts =
-        mts_submode->min_waited_timestamp.load();
 
     DBUG_EXECUTE_IF("replica_worker_ends_group_before_signal_lwm", {
       const char act[] = "now WAIT_FOR worker_continue";
@@ -1280,16 +1280,15 @@ void Slave_worker::slave_worker_ends_group(Log_event *ev, int error) {
       if (mts_submode->min_waited_timestamp != SEQ_UNINIT)
         mysql_cond_signal(&c_rli->logical_clock_cond);
       mysql_mutex_unlock(&c_rli->mts_gaq_LOCK);
-    } else if (min_child_waited_logical_ts != SEQ_UNINIT) {
+    } else {
       mysql_mutex_lock(&c_rli->mts_gaq_LOCK);
 
       /*
         min_child_waited_logical_ts may include an old value, so we need to
         check it again after getting the lock.
       */
-      if (mts_submode->min_waited_timestamp != SEQ_UNINIT) {
-        longlong curr_lwm = mts_submode->get_lwm_timestamp(c_rli, true);
-
+      longlong curr_lwm = mts_submode->get_lwm_timestamp(c_rli, true);
+      if (curr_lwm > SEQ_UNINIT) {
         if (mts_submode->clock_leq(mts_submode->min_waited_timestamp,
                                    curr_lwm)) {
           /*
@@ -1370,10 +1369,24 @@ bool Slave_committed_queue::count_done(Relay_log_info *rli) {
 
    @return number of discarded items
 */
-size_t Slave_committed_queue::move_queue_head(Slave_worker_array *ws) {
+size_t Slave_committed_queue::move_queue_head(Slave_worker_array *ws, uint groups, uint *total_valid) {
   DBUG_TRACE;
   size_t cnt = 0;
+  ulong i;
   assert(entry <= avail);
+
+  uint counter = 0;
+
+  for (i = entry; i != avail; i = (i + 1)) {
+    Slave_job_group *ptr_g = &m_Q[i % groups];
+    if (ptr_g->worker_id != MTS_WORKER_UNDEF) {
+      counter++;
+    }
+  }
+
+  *total_valid = counter;
+
+  counter = 0;
   while (!empty()) {
     Slave_worker *w_i;
     Slave_job_group *ptr_g;
@@ -1385,6 +1398,7 @@ size_t Slave_committed_queue::move_queue_head(Slave_worker_array *ws) {
       return cnt;
 #endif
 
+    counter++;
     grl_name[0] = 0;
     ptr_g = &m_Q[entry];
 
@@ -1392,8 +1406,9 @@ size_t Slave_committed_queue::move_queue_head(Slave_worker_array *ws) {
       The current job has not been processed or it was not
       even assigned, this means there is a gap.
     */
-    if (ptr_g->worker_id == MTS_WORKER_UNDEF || ptr_g->done.load() == 0)
+    if (ptr_g->worker_id == MTS_WORKER_UNDEF || ptr_g->done.load() == 0) {
       break; /* gap at entry'th */
+    }
 
     /* Worker-id domain guard */
     static_assert(MTS_WORKER_UNDEF > MTS_MAX_WORKERS, "");
@@ -1473,10 +1488,39 @@ size_t Slave_committed_queue::move_queue_head(Slave_worker_array *ws) {
                        size when none is found.
 */
 size_t Slave_committed_queue::find_lwm(Slave_job_group **arg_g,
-                                       size_t start_index) {
+                                       size_t start_index, int *valid) {
   Slave_job_group *ptr_g = nullptr;
 
-  assert(in(start_index));
+  bool check_valid = in(start_index);
+  if (!check_valid) {
+    if (entry == avail && start_index == avail) {
+        *valid = 0;
+        return SEQ_UNINIT;
+    }
+    if (start_index == 0 || start_index == capacity) {
+      start_index = entry;
+    } else {
+      int counter = 0;
+      int sleep_time = 100;
+      do {
+        counter++;
+        if (counter > 10) {
+          break;
+        } else if (counter > 1) {
+          LogErr(INFORMATION_LEVEL, ER_RPL_FIND_LWM_WARNING_LOG, start_index, entry, avail);
+        }
+        my_sleep(sleep_time);
+        sleep_time += 100;
+        check_valid = in(start_index);
+      } while (!check_valid);
+
+      if (!check_valid) {
+        *valid = 0;
+        LogErr(WARNING_LEVEL, ER_RPL_FIND_LWM_WARNING_LOG, start_index, entry, avail);
+        return SEQ_UNINIT;
+      }
+    }
+  }
 
   /*
     Loop continuation condition relies on
@@ -1835,8 +1879,10 @@ std::tuple<bool, bool, uint> Slave_worker::check_and_report_end_of_retries(
   }
 
   if (!has_temporary_error(thd, error, &silent) ||
-      thd->get_transaction()->cannot_safely_rollback(Transaction_ctx::SESSION))
+      thd->get_transaction()->cannot_safely_rollback(
+          Transaction_ctx::SESSION)) {
     return std::make_tuple(true, silent, error);
+  }
 
   if (trans_retries >= slave_trans_retries) {
     thd->fatal_error();
@@ -1885,7 +1931,9 @@ bool Slave_worker::retry_transaction(my_off_t start_relay_pos,
 
     std::tie(ret, silent, error) = check_and_report_end_of_retries(thd);
     DBUG_EXECUTE_IF("error_on_rows_query_event_apply", { ret = false; };);
-    if (ret) return true;
+    if (ret) {
+      return true;
+    }
 
     DBUG_EXECUTE_IF("error_on_rows_query_event_apply", {
       if (c_rli->retried_trans == 2) {
@@ -1925,7 +1973,6 @@ bool Slave_worker::retry_transaction(my_off_t start_relay_pos,
     mysql_mutex_unlock(&c_rli->data_lock);
 
     clean_retry_context();
-    worker_sleep(min<ulong>(trans_retries, MAX_SLAVE_RETRY_PAUSE));
 
   } while (read_and_apply_events(start_relay_pos, start_event_relay_log_name,
                                  end_relay_pos, end_event_relay_log_name));
@@ -2089,53 +2136,9 @@ bool append_item_to_jobs(slave_job_item *job_item, Slave_worker *worker,
                          Relay_log_info *rli) {
   THD *thd = rli->info_thd;
   size_t ret = Slave_jobs_queue::error_result;
-  size_t ev_size = job_item->data->common_header->data_written;
-  ulonglong new_pend_size;
   PSI_stage_info old_stage;
 
   assert(thd == current_thd);
-
-  mysql_mutex_lock(&rli->pending_jobs_lock);
-  new_pend_size = rli->mts_pending_jobs_size + ev_size;
-  bool big_event = (ev_size > rli->mts_pending_jobs_size_max);
-  Slave_job_group *ptr_g =
-      rli->gaq->get_job_group(rli->gaq->assigned_group_index);
-  /*
-    C waits basing on *data* sizes in the queues.
-    If it is a big event (event size is greater than
-    replica_pending_jobs_size_max but less than replica_max_allowed_packet),
-    it will wait for all the jobs in the workers's queue to be
-    completed. If it is normal event (event size is less than
-    replica_pending_jobs_size_max), then it will wait for
-    enough empty memory to keep the event in one of the workers's
-    queue.
-    NOTE: Receiver thread (I/O thread) is taking care of restricting
-    the event size to replica_max_allowed_packet. If an event from
-    the master is bigger than this value, IO thread will be stopped
-    with error ER_NET_PACKET_TOO_LARGE.
-  */
-  while ((!big_event && new_pend_size > rli->mts_pending_jobs_size_max) ||
-         (big_event && rli->mts_pending_jobs_size != 0)) {
-    rli->mts_wq_oversize = true;
-    rli->wq_size_waits_cnt++;  // waiting due to the total size
-    thd->ENTER_COND(&rli->pending_jobs_cond, &rli->pending_jobs_lock,
-                    &stage_replica_waiting_worker_to_free_events, &old_stage);
-    mysql_cond_wait(&rli->pending_jobs_cond, &rli->pending_jobs_lock);
-    mysql_mutex_unlock(&rli->pending_jobs_lock);
-    thd->EXIT_COND(&old_stage);
-    if (thd->killed) return true;
-    if (rli->wq_size_waits_cnt % 10 == 1)
-      LogErr(INFORMATION_LEVEL, ER_RPL_MTA_REPLICA_COORDINATOR_HAS_WAITED,
-             rli->wq_size_waits_cnt, ev_size);
-    mysql_mutex_lock(&rli->pending_jobs_lock);
-
-    new_pend_size = rli->mts_pending_jobs_size + ev_size;
-  }
-  rli->pending_jobs++;
-  rli->mts_pending_jobs_size = new_pend_size;
-  rli->mts_events_assigned++;
-
-  mysql_mutex_unlock(&rli->pending_jobs_lock);
 
   /*
     Sleep unless there is an underrunning Worker and the current Worker
@@ -2166,6 +2169,7 @@ bool append_item_to_jobs(slave_job_item *job_item, Slave_worker *worker,
     rli->mts_wq_no_underrun_cnt++;
   }
 
+  Slave_job_group *ptr_g = rli->gaq->get_job_group(rli->gaq->assigned_group_index);
   // unclaim ownership of the event log memory
   job_item->data->claim_memory_ownership(/*claim=*/false);
   if (worker->checkpoint_notified) {
@@ -2201,11 +2205,6 @@ bool append_item_to_jobs(slave_job_item *job_item, Slave_worker *worker,
   } else {
     mysql_mutex_unlock(&worker->jobs_lock);
 
-    mysql_mutex_lock(&rli->pending_jobs_lock);
-    rli->pending_jobs--;  // roll back of the prev incr
-    rli->mts_pending_jobs_size -= ev_size;
-    mysql_mutex_unlock(&rli->pending_jobs_lock);
-
     // claim back ownership of the event log memory
     job_item->data->claim_memory_ownership(/*claim=*/true);
     if (worker->checkpoint_notified) {
@@ -2228,10 +2227,7 @@ bool append_item_to_jobs(slave_job_item *job_item, Slave_worker *worker,
   param[in] worker   The worker which job_item belongs to.
   param[in] rli      slave's relay log info object.
  */
-static void remove_item_from_jobs(slave_job_item *job_item,
-                                  Slave_worker *worker, Relay_log_info *rli) {
-  Log_event *ev = job_item->data;
-
+static void remove_item_from_jobs(slave_job_item *job_item, Slave_worker *worker) {
   mysql_mutex_lock(&worker->jobs_lock);
   worker->jobs.de_queue(job_item);
   /* possible overfill */
@@ -2243,75 +2239,9 @@ static void remove_item_from_jobs(slave_job_item *job_item,
   }
   mysql_mutex_unlock(&worker->jobs_lock);
 
-  /* statistics */
-
-  const auto jobs_length = worker->jobs.get_length();
-  /* todo: convert to rwlock/atomic write */
-  mysql_mutex_lock(&rli->pending_jobs_lock);
-
-  rli->pending_jobs--;
-  rli->mts_pending_jobs_size -= ev->common_header->data_written;
-  assert(rli->mts_pending_jobs_size < rli->mts_pending_jobs_size_max);
-
-  /*
-    The positive branch is underrun: number of pending assignments
-    is less than underrun level.
-    Zero of jobs.len has to reset underrun w_id as the worker may get
-    the next piece of assignment in a long time.
-  */
-  if (worker->underrun_level > jobs_length && jobs_length != 0) {
-    rli->mts_wq_underrun_w_id = worker->id;
-  } else if (rli->mts_wq_underrun_w_id == worker->id) {
-    // reset only own marking
-    rli->mts_wq_underrun_w_id = MTS_WORKER_UNDEF;
-  }
-
-  /*
-    Overrun handling.
-    Incrementing the Worker private and the total excess counter corresponding
-    to number of events filled above the overrun_level.
-    The increment amount to the total counter is a difference between
-    the current and the previous private excess (worker->wq_overrun_cnt).
-    When the current queue length drops below overrun_level the global
-    counter is decremented, the local is reset.
-  */
-  if (worker->overrun_level < jobs_length) {
-    ulong last_overrun = worker->wq_overrun_cnt;
-    ulong excess_delta;
-
-    /* current overrun */
-    worker->wq_overrun_cnt = jobs_length - worker->overrun_level;
-    excess_delta = worker->wq_overrun_cnt - last_overrun;
-    worker->excess_cnt += excess_delta;
-    rli->mts_wq_excess_cnt += excess_delta;
-    rli->mts_wq_overrun_cnt++;  // statistics
-
-    // guarding correctness of incrementing in case of the only one Worker
-    assert(rli->workers.size() != 1 ||
-           rli->mts_wq_excess_cnt == worker->wq_overrun_cnt);
-  } else if (worker->excess_cnt > 0) {
-    // When level drops below the total excess is decremented by the
-    // value of the worker's contribution to the total excess.
-    rli->mts_wq_excess_cnt -= worker->excess_cnt;
-    worker->excess_cnt = 0;
-    worker->wq_overrun_cnt = 0;  // and the local is reset
-
-    assert(rli->mts_wq_excess_cnt >= 0);
-    assert(rli->mts_wq_excess_cnt == 0 || rli->workers.size() > 1);
-  }
-
-  /* coordinator can be waiting */
-  if (rli->mts_pending_jobs_size < rli->mts_pending_jobs_size_max &&
-      rli->mts_wq_oversize)  // TODO: unit/general test wq_oversize
-  {
-    rli->mts_wq_oversize = false;
-    mysql_cond_signal(&rli->pending_jobs_cond);
-  }
-
-  mysql_mutex_unlock(&rli->pending_jobs_lock);
-
   worker->events_done++;
 }
+
 /**
    Worker's routine to wait for a new assignment through
    @c append_item_to_jobs()
@@ -2428,10 +2358,15 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
   THD *thd = worker->info_thd;
   bool seen_gtid = false;
   bool seen_begin = false;
+  bool abort_worker = false;
   int error = 0;
+  int counter = 0;
   Log_event *ev = nullptr;
   my_off_t start_relay_pos;
   char start_event_relay_log_name[FN_REFLEN + 1];
+  Slave_job_group *ptr_group = nullptr;
+  Slave_committed_queue *gaq = rli->gaq;
+
 
   DBUG_TRACE;
 
@@ -2466,6 +2401,11 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
       goto err;
     }
 
+    if (worker->running_status == Slave_worker::STOP) {
+      error = -1;
+      goto err;
+    }
+
     ev = job_item->data;
     assert(ev != nullptr);
 
@@ -2474,6 +2414,53 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
 
     DBUG_PRINT("info", ("W_%lu <- job item: %p data: %p thd: %p", worker->id,
                         job_item, ev, thd));
+    if (worker->is_wait_last_commited) {
+     longlong lwm_estimate =  static_cast<Mts_submode_logical_clock *>(rli->current_mts_submode)->estimate_lwm_timestamp();
+     while(worker->is_wait_last_commited) {
+       if (worker->last_commmitted_seq <= lwm_estimate) {
+         worker->is_wait_last_commited = false;
+         break;
+       }
+       if (unlikely(thd->killed ||
+             worker->running_status == Slave_worker::STOP_ACCEPTED || 
+             worker->running_status == Slave_worker::STOP)) {
+         worker->running_status = Slave_worker::STOP_ACCEPTED;
+         error = -1;
+         goto err;
+       }
+       my_sleep(10);
+       counter++;
+       lwm_estimate =  static_cast<Mts_submode_logical_clock *>(rli->current_mts_submode)->estimate_lwm_timestamp();
+     }
+    }
+
+    if (ev->get_type_code() == binary_log::VIEW_CHANGE_EVENT) {
+      /* Just to call view-related functions */
+      if (rli->is_until_satisfied_before_dispatching_event(ev)) {
+      }
+      rli->view_change_until_set = true;
+    }
+
+    if (rli->is_until_satisfied) {
+      if (rli->sequence_number == 0) {
+        abort_worker = true;
+      }
+    }
+
+    /* Notify the worker about new FD */
+    if (!worker->fd_change_notified) {
+      if (!ptr_group)
+        ptr_group = gaq->get_job_group(ev->mts_group_idx);
+      /*
+         Increment the usage counter on behalf of Worker.
+         This avoids inadvertent FD deletion in a race case where Coordinator
+         would install a next new FD before Worker has noticed the previous one.
+       */
+      ++rli->get_rli_description_event()->atomic_usage_counter;
+      ptr_group->new_fd_event = rli->get_rli_description_event();
+      worker->fd_change_notified = true;
+    }
+
     /*
       Associate the freshly read event with worker.
       The binding also remains when the loop breaks at the group end event
@@ -2502,7 +2489,6 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
     worker->set_group_source_log_start_end_pos(ev);
 
     error = worker->slave_worker_exec_event(ev);
-
     set_timespec_nsec(&worker->ts_exec[1], 0);  // pre-exec
     worker->stats_exec_time +=
         diff_timespec(&worker->ts_exec[1], &worker->ts_exec[0]);
@@ -2531,7 +2517,7 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
                               (!seen_gtid && !is_mts_db_partitioned(rli)))))
       break;
 
-    remove_item_from_jobs(job_item, worker, rli);
+    remove_item_from_jobs(job_item, worker);
     /* The event will be used later if worker is NULL, so it is not freed */
     if (ev->worker != nullptr) delete ev;
 
@@ -2588,9 +2574,16 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
   }
 #endif
 
-  remove_item_from_jobs(job_item, worker, rli);
+  remove_item_from_jobs(job_item, worker);
   delete ev;
 
+  if (abort_worker) {
+    mysql_mutex_lock(&rli->data_lock);
+    rli->abort_slave = true;
+    mysql_mutex_unlock(&rli->data_lock);
+    error = -1;
+    goto err;
+  }
 #ifdef HAVE_PSI_THREAD_INTERFACE
   if (thread != nullptr) {
     PSI_THREAD_CALL(abort_telemetry)(thread);
@@ -2600,14 +2593,24 @@ int slave_worker_exec_job_group(Slave_worker *worker, Relay_log_info *rli) {
   return 0;
 err:
   if (error) {
-    Commit_stage_manager::get_instance().finish_session_ticket(thd);
-
     report_error_to_coordinator(worker);
     DBUG_PRINT("info", ("Worker %lu is exiting: killed %i, error %i, "
                         "running_status %d",
                         worker->id, thd->killed.load(), thd->is_error(),
                         worker->running_status));
     worker->slave_worker_ends_group(ev, error); /* last done sets post exec */
+    if (rli->info_thd->killed) {
+      mysql_mutex_lock(&rli->data_lock);
+      rli->abort_slave = true;
+      rli->abort_slave_expected = true;
+      mysql_mutex_unlock(&rli->data_lock);
+    }
+  }
+  if (abort_worker) {
+    mysql_mutex_lock(&rli->data_lock);
+    rli->abort_slave = true;
+    mysql_mutex_unlock(&rli->data_lock);
+    error = -1;
   }
 #ifdef HAVE_PSI_THREAD_INTERFACE
   if (thread != nullptr) {

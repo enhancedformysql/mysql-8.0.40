@@ -63,14 +63,13 @@ void Initialize_notification::do_execute() {
 }
 
 Data_notification::Data_notification(xcom_receive_data_functor *functor,
-                                     synode_no message_id, synode_no origin,
+                                     synode_no message_id,
                                      Gcs_xcom_nodes *xcom_nodes,
 
                                      synode_no last_removed, u_int size,
                                      char *data)
     : m_functor(functor),
       m_message_id(message_id),
-      m_origin(origin),
       m_xcom_nodes(xcom_nodes),
       m_last_removed(last_removed),
       m_size(size),
@@ -79,8 +78,7 @@ Data_notification::Data_notification(xcom_receive_data_functor *functor,
 Data_notification::~Data_notification() = default;
 
 void Data_notification::do_execute() {
-  (*m_functor)(m_message_id, m_origin, m_xcom_nodes, m_last_removed, m_size,
-               m_data);
+  (*m_functor)(m_message_id, m_xcom_nodes, m_last_removed, m_size, m_data);
 }
 
 Status_notification::Status_notification(xcom_status_functor *functor,
@@ -217,11 +215,11 @@ void Gcs_xcom_engine::process() {
     m_notification_queue.pop();
     m_wait_for_notification_mutex.unlock();
 
-    MYSQL_GCS_LOG_TRACE("xcom_id %x Started executing during regular phase: %p",
-                        get_my_xcom_id(), notification)
+    MYSQL_GCS_LOG_TRACE("Started executing during regular phase: %p",
+                        notification)
     stop = (*notification)();
-    MYSQL_GCS_LOG_TRACE("xcom_id %x Finish executing during regular phase: %p",
-                        get_my_xcom_id(), notification)
+    MYSQL_GCS_LOG_TRACE("Finish executing during regular phase: %p",
+                        notification)
     delete notification;
   }
 }

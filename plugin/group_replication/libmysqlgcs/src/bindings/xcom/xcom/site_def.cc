@@ -28,8 +28,6 @@
 
 #include <assert.h>
 #include <stdlib.h>
-#include <algorithm>
-#include <iterator>
 
 #include "xcom/bitset.h"
 #include "xcom/node_list.h"
@@ -40,7 +38,6 @@
 #include "xcom/site_struct.h"
 #include "xcom/synode_no.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/x_platform.h"
 #include "xcom/xcom_base.h"
 #include "xcom/xcom_common.h"
@@ -83,22 +80,12 @@ void init_site_vars() {
  the servers that it points to, since servers are shared by multiple
  site_defs, and will eventually be deallocated by garbage_collect_servers
 */
-
-void free_site_def_body(site_def *s) {
+void free_site_def(site_def *s) {
   if (s) {
     invalidate_detector_sites(s);
     xdr_free((xdrproc_t)xdr_node_list, (char *)(&s->nodes));
     free_node_set(&s->global_node_set);
     free_node_set(&s->local_node_set);
-    xdr_free((xdrproc_t)xdr_leader_array, (char *)(&s->leaders));
-    IFDBG(D_BUG, FN; STRLIT("free "); PTREXP(s); PTREXP(s->dispatch_table));
-    free(s->dispatch_table);
-  }
-}
-
-void free_site_def(site_def *s) {
-  if (s) {
-    free_site_def_body(s);
     free(s);
   }
 }
@@ -117,25 +104,13 @@ void free_site_defs() {
 site_def *push_site_def(site_def *s) {
   uint32_t i;
   set_site_def_ptr(&site_defs, nullptr, site_defs.count);
-  IFDBG(
-      D_NONE, FN; NDBG(site_defs.count, u); PTREXP(s); if (s) {
-        SYCEXP(s->start);
-        SYCEXP(s->boot_key);
-      });
   for (i = site_defs.count; i > 0; i--) {
-    IFDBG(
-        D_NONE, NDBG(i - 1, d); PTREXP(site_defs.site_def_ptr_array_val[i - 1]);
-        if (site_defs.site_def_ptr_array_val[i - 1]) {
-          SYCEXP(site_defs.site_def_ptr_array_val[i - 1]->start);
-          SYCEXP(site_defs.site_def_ptr_array_val[i - 1]->boot_key);
-        });
     site_defs.site_def_ptr_array_val[i] =
         site_defs.site_def_ptr_array_val[i - 1];
   }
   set_site_def_ptr(&site_defs, s, 0);
   if (s) {
     s->x_proto = set_latest_common_proto(common_xcom_version(s));
-    G_DEBUG("latest common protocol is now %d", s->x_proto);
   }
   site_defs.count++;
   assert(!s || (s->global_node_set.node_set_len == _get_maxnodes(s)));
@@ -161,8 +136,9 @@ site_def *get_site_def_rw() {
     return nullptr;
 }
 
-/* purecov: begin deadcode */
-/* Return previous site def */
+/* Return first site def as const ptr */
+site_def const *get_site_def() { return _get_site_def(); }
+
 static inline site_def const *_get_prev_site_def() {
   assert(site_defs.count == 0 || !site_defs.site_def_ptr_array_val[1] ||
          site_defs.site_def_ptr_array_val[1]->global_node_set.node_set_len ==
@@ -172,17 +148,8 @@ static inline site_def const *_get_prev_site_def() {
   else
     return nullptr;
 }
-/* purecov: end */
 
-/* Return first site def as const ptr */
-site_def const *get_site_def() { return _get_site_def(); }
-
-/* purecov: begin deadcode */
-
-/* Return previous site def */
 site_def const *get_prev_site_def() { return _get_prev_site_def(); }
-
-/* purecov: end */
 
 /* Checks if site->start >= synode. */
 static inline int match_def(site_def const *site, synode_no synode) {
@@ -196,11 +163,12 @@ site_def const *find_site_def(synode_no synode) {
   site_def const *retval = nullptr;
   u_int i;
 
-  for (i = 0; i < site_defs.count; i++)
+  for (i = 0; i < site_defs.count; i++) {
     if (match_def(site_defs.site_def_ptr_array_val[i], synode)) {
       retval = site_defs.site_def_ptr_array_val[i];
       break;
     }
+  }
   assert(!retval ||
          retval->global_node_set.node_set_len == _get_maxnodes(retval));
   return retval;
@@ -266,7 +234,6 @@ void garbage_collect_site_defs(synode_no x) {
   u_int i;
   u_int s_max = site_defs.count;
 
-  IFDBG(D_NONE, FN; NDBG(site_defs.count, u); SYCEXP(x););
   for (i = 3; i < s_max; i++) {
     if (match_def(site_defs.site_def_ptr_array_val[i], x)) {
       break;
@@ -275,9 +242,9 @@ void garbage_collect_site_defs(synode_no x) {
   i++;
   for (; i < s_max; i++) {
     site_def *site = site_defs.site_def_ptr_array_val[i];
-    IFDBG(D_NONE, NDBG(i, d); PTREXP(site_defs.site_def_ptr_array_val[i]););
     if (site) {
-      IFDBG(D_NONE, SYCEXP(site->start); SYCEXP(site->boot_key););
+      G_INFO("free_site_def site:%p, x.msgno:%lu, x.node:%d", site, x.msgno,
+          x.node);
       free_site_def(site);
       site_defs.site_def_ptr_array_val[i] = nullptr;
     }
@@ -285,56 +252,26 @@ void garbage_collect_site_defs(synode_no x) {
   }
 }
 
-/* purecov: begin deadcode */
-char *dbg_site_def(site_def const *site) {
-  assert(site->global_node_set.node_set_len == _get_maxnodes(site));
-  return dbg_list(&site->nodes);
-}
-/* purecov: end */
-
 /* Create a new empty site_def */
 site_def *new_site_def() {
-  site_def *retval = (site_def *)xcom_calloc((size_t)1, sizeof(site_def));
+  site_def *retval = (site_def *)calloc((size_t)1, sizeof(site_def));
   retval->nodeno = VOID_NODE_NO;
+  G_INFO("new_site_def, new:%p", retval);
   return retval;
-}
-
-static void clone_leader(leader *l, leader const *x) {
-  l->address = strdup(x->address);
-}
-
-leader_array alloc_leader_array(u_int n) {
-  leader_array a{};
-  a.leader_array_val =
-      static_cast<leader *>(xcom_calloc((size_t)n, sizeof(leader)));
-  if (a.leader_array_val) a.leader_array_len = n;
-  return a;
-}
-
-leader_array clone_leader_array(leader_array const x) {
-  u_int i;
-  leader_array a = alloc_leader_array(x.leader_array_len);
-  for (i = 0; i < a.leader_array_len; i++) {
-    clone_leader(&a.leader_array_val[i], &x.leader_array_val[i]);
-  }
-  return a;
 }
 
 /* Clone a site definition */
 
 site_def *clone_site_def(site_def const *site) {
   site_def *retval = new_site_def();
+  G_INFO("clone_site_def, new:%p,old site:%p", retval, site);
   assert(site->global_node_set.node_set_len == _get_maxnodes(site));
   *retval = *site;
   init_node_list(site->nodes.node_list_len, site->nodes.node_list_val,
                  &retval->nodes);
   retval->global_node_set = clone_node_set(site->global_node_set);
   retval->local_node_set = clone_node_set(site->local_node_set);
-  retval->leaders = clone_leader_array(site->leaders);
-  retval->cached_leaders = false;    // Invalidate cached leaders
-  retval->dispatch_table = nullptr;  // Invalidate dispatch table
   assert(retval->global_node_set.node_set_len == _get_maxnodes(retval));
-  IFDBG(D_NONE, FN; PTREXP(site); PTREXP(retval));
   return retval;
 }
 
@@ -357,6 +294,7 @@ void init_site_def(u_int n, node_address *names, site_def *site) {
   set_node_set(&site->local_node_set); /* Assume everyone is there */
   assert(site->local_node_set.node_set_len == _get_maxnodes(site));
   site->detector_updated = 0;
+  site->max_conn_rtt = 0;
   site->x_proto = my_xcom_version;
   /* Inherit latest configuration's event horizon or fallback to default */
   latest_config = get_site_def();
@@ -370,6 +308,7 @@ void init_site_def(u_int n, node_address *names, site_def *site) {
 
 /* Add nodes to site definition, avoid duplicates */
 void add_site_def(u_int n, node_address *names, site_def *site) {
+  G_INFO("add_site_def n:%u, site:%p", n, site);
   if (n > 0) {
     add_node_list(n, names, &site->nodes);
   }
@@ -379,11 +318,13 @@ void add_site_def(u_int n, node_address *names, site_def *site) {
 
 /* Remove nodes from site definition, ignore missing nodes */
 void remove_site_def(u_int n, node_address *names, site_def *site) {
+  G_INFO("remove_site_def n:%u, site:%p", n, site);
   if (n > 0) {
     remove_node_list(n, names, &site->nodes);
-    realloc_node_set(&site->global_node_set, _get_maxnodes(site));
-    realloc_node_set(&site->local_node_set, _get_maxnodes(site));
   }
+  init_detector(site->detected); /* Zero all unused timestamps */
+  realloc_node_set(&site->global_node_set, _get_maxnodes(site));
+  realloc_node_set(&site->local_node_set, _get_maxnodes(site));
 }
 
 /* Return group id of site */
@@ -391,7 +332,6 @@ uint32_t get_group_id(site_def const *site) {
   if (site) {
     uint32_t group_id = site->start.group_id;
     assert(site->global_node_set.node_set_len == _get_maxnodes(site));
-    IFDBG(D_NONE, FN; NDBG((unsigned long)group_id, lu););
     return group_id;
   } else {
     return null_id;
@@ -413,27 +353,23 @@ static inline node_no _get_nodeno(site_def const *site) {
   if (site) {
     assert(site->global_node_set.node_set_len == _get_maxnodes(site));
     return site->nodeno;
-  } else
+  } else {
+    G_INFO("_get_nodeno return VOID_NODE_NO");
     return VOID_NODE_NO;
+  }
 }
 
-/* purecov: begin deadcode */
 /* Return nodeno of site */
 node_no get_nodeno(site_def const *site) { return _get_nodeno(site); }
 /* purecov: end */
 
 node_no find_nodeno(site_def const *site, const char *address) {
   uint32_t i;
-  G_TRACE("find_nodeno: Node to find: %s", address);
   for (i = 0; i < site->nodes.node_list_len; i++) {
-    G_TRACE("find_nodeno: Node %d: %s", i,
-            site->nodes.node_list_val[i].address);
     if (strcmp(site->nodes.node_list_val[i].address, address) == 0) return i;
   }
   return VOID_NODE_NO;
 }
-
-node_no get_prev_nodeno() { return _get_nodeno(_get_prev_site_def()); }
 
 /* Find the maximum config number known on this node */
 synode_no config_max_boot_key(gcs_snapshot const *gcs_snap) {
@@ -454,7 +390,6 @@ synode_no config_max_boot_key(gcs_snapshot const *gcs_snap) {
 /* Import configs from snapshot */
 void import_config(gcs_snapshot *gcs_snap) {
   int i;
-  IFDBG(D_NONE, FN; SYCEXP(gcs_snap->log_start); SYCEXP(gcs_snap->log_end));
   for (i = (int)gcs_snap->cfg.configs_len - 1; i >= 0; i--) {
     config_ptr cp = gcs_snap->cfg.configs_val[i];
     if (cp) {
@@ -468,15 +403,12 @@ void import_config(gcs_snapshot *gcs_snap) {
           !synode_eq(cp->boot_key, get_site_def()->boot_key) ||
           !synode_eq(cp->start, get_site_def()->start)) {
         site_def *site = new_site_def();
-        IFDBG(D_NONE, FN; SYCEXP(cp->start); SYCEXP(cp->boot_key));
         init_site_def(cp->nodes.node_list_len, cp->nodes.node_list_val, site);
         site->start = cp->start;
         site->boot_key = cp->boot_key;
         assert(cp->event_horizon);
         site->event_horizon = cp->event_horizon;
         copy_node_set(&cp->global_node_set, &site->global_node_set);
-        site->max_active_leaders = cp->max_active_leaders;
-        site->leaders = clone_leader_array(cp->leaders);
         site_install_action(site, app_type);
       }
     }
@@ -501,15 +433,15 @@ static synode_no get_conf_max() {
 gcs_snapshot *export_config() {
   u_int i;
   gcs_snapshot *gcs_snap =
-      (gcs_snapshot *)xcom_calloc((size_t)1, sizeof(gcs_snapshot));
+      (gcs_snapshot *)calloc((size_t)1, sizeof(gcs_snapshot));
   gcs_snap->cfg.configs_val =
-      (config_ptr *)xcom_calloc((size_t)site_defs.count, sizeof(config_ptr));
+      (config_ptr *)calloc((size_t)site_defs.count, sizeof(config_ptr));
   gcs_snap->cfg.configs_len = site_defs.count;
 
   for (i = 0; i < site_defs.count; i++) {
     site_def *site = site_defs.site_def_ptr_array_val[i];
     if (site) {
-      config_ptr cp = (config_ptr)xcom_calloc((size_t)1, sizeof(config));
+      config_ptr cp = (config_ptr)calloc((size_t)1, sizeof(config));
       init_node_list(site->nodes.node_list_len, site->nodes.node_list_val,
                      &cp->nodes);
       cp->start = site->start;
@@ -517,9 +449,6 @@ gcs_snapshot *export_config() {
       cp->event_horizon = site->event_horizon;
       assert(cp->event_horizon);
       cp->global_node_set = clone_node_set(site->global_node_set);
-      cp->max_active_leaders = site->max_active_leaders;
-      cp->leaders = clone_leader_array(site->leaders);
-      IFDBG(D_BUG, FN; SYCEXP(cp->start); SYCEXP(cp->boot_key));
       gcs_snap->cfg.configs_val[i] = cp;
     }
   }
@@ -539,9 +468,14 @@ synode_no get_min_delivered_msg(site_def const *s) {
   u_int i;
   synode_no retval = null_synode;
   int init = 1;
-
+  double current = task_now();
   for (i = 0; i < s->nodes.node_list_len; i++) {
-    if (s->servers[i]->detected + DETECTOR_LIVE_TIMEOUT > task_now()) {
+    double timeout = DEFAULT_DETECTOR_LIVE_TIMEOUT;
+    double diff = current - s->servers[i]->large_transfer_detected;
+    if (diff < DEFAULT_SILENT) {
+      timeout = MAX_DETECTOR_LIVE_TIMEOUT;
+    }
+    if (s->servers[i]->detected + timeout > task_now()) {
       if (init) {
         init = 0;
         retval = s->delivered_msg[i];
@@ -552,7 +486,6 @@ synode_no get_min_delivered_msg(site_def const *s) {
       }
     }
   }
-  IFDBG(D_NONE, FN; SYCEXP(retval));
   return retval;
 }
 
@@ -560,7 +493,6 @@ synode_no get_min_delivered_msg(site_def const *s) {
 void update_delivered(site_def *s, node_no node, synode_no msgno) {
   if (node < s->nodes.node_list_len) {
     s->delivered_msg[node] = msgno;
-    /* IFDBG(D_NONE, FN; SYCEXP(s->delivered_msg[node]); NDBG(node,u)); */
   }
 }
 
@@ -572,11 +504,9 @@ the LAST config has the lowest. */
 synode_no get_highest_boot_key(gcs_snapshot *gcs_snap) {
   int i;
   synode_no retval = null_synode;
-  IFDBG(D_NONE, FN; SYCEXP(gcs_snap->log_start); SYCEXP(gcs_snap->log_end));
   for (i = 0; i < (int)gcs_snap->cfg.configs_len; i++) {
     config_ptr cp = gcs_snap->cfg.configs_val[i];
     if (cp) {
-      IFDBG(D_NONE, FN; SYCEXP(cp->start); SYCEXP(cp->boot_key));
       retval = cp->boot_key;
       break;
     }
@@ -584,3 +514,4 @@ synode_no get_highest_boot_key(gcs_snapshot *gcs_snap) {
   assert(!synode_eq(retval, null_synode));
   return retval;
 }
+

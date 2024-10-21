@@ -36,26 +36,6 @@ void Gcs_interface_parameters::add_parameter(const std::string &name,
   parameters.insert(to_add);
 }
 
-/* purecov: begin deadcode */
-bool Gcs_interface_parameters::check_parameters(const char *params[],
-                                                int size) const {
-  for (int index = 0; index < size; index++) {
-    std::string param(params[index]);
-    if (get_parameter(param)) return true;
-  }
-  return false;
-}
-
-bool Gcs_interface_parameters::check_parameters(
-    const std::vector<std::string> &params) const {
-  for (std::vector<std::string>::const_iterator it = params.begin();
-       it != params.end(); ++it) {
-    if (get_parameter(*it)) return true;
-  }
-  return false;
-}
-/* purecov: end */
-
 const std::string *Gcs_interface_parameters::get_parameter(
     const std::string &name) const {
   const std::string *retval = nullptr;

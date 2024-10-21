@@ -15,7 +15,6 @@
 --source include/have_group_replication_plugin.inc
 --let $rpl_server_count= 2
 --let $rpl_skip_group_replication_start= 1
---let $rpl_group_replication_single_primary_mode=1
 --source include/group_replication.inc
 
 --echo
@@ -91,7 +90,6 @@ SET @saved_gr_recovery_ssl_crlpath = @@GLOBAL.group_replication_recovery_ssl_crl
 SET @saved_gr_recovery_ssl_key = @@GLOBAL.group_replication_recovery_ssl_key;
 SET @saved_gr_recovery_ssl_verify_server_cert = @@GLOBAL.group_replication_recovery_ssl_verify_server_cert;
 SET @saved_gr_recovery_use_ssl = @@GLOBAL.group_replication_recovery_use_ssl;
-SET @saved_gr_single_primary_mode = @@GLOBAL.group_replication_single_primary_mode;
 SET @saved_gr_ssl_mode = @@GLOBAL.group_replication_ssl_mode;
 SET @saved_gr_start_on_boot = @@GLOBAL.group_replication_start_on_boot;
 SET @saved_gr_transaction_size_limit = @@GLOBAL.group_replication_transaction_size_limit;
@@ -136,7 +134,6 @@ SET GLOBAL group_replication_recovery_ssl_crl= 'crl-client-revoked.crl';
 SET GLOBAL group_replication_recovery_ssl_crlpath= '';
 SET GLOBAL group_replication_recovery_ssl_key= '$MYSQL_TEST_DIR/std_data/client-key.pem';
 SET GLOBAl group_replication_recovery_ssl_verify_server_cert= ON;
-SET GLOBAl group_replication_single_primary_mode= OFF;
 SET GLOBAL group_replication_recovery_use_ssl= ON;
 SET GLOBAL group_replication_ssl_mode= "REQUIRED";
 SET GLOBAL group_replication_start_on_boot= ON;
@@ -165,7 +162,6 @@ SET @@GLOBAL.group_replication_auto_increment_increment= @saved_gr_auto_incremen
 SET @@GLOBAL.group_replication_bootstrap_group= @saved_gr_bootstrap_group;
 SET @@GLOBAL.group_replication_components_stop_timeout= @saved_gr_components_stop_timeout;
 SET @@GLOBAL.group_replication_compression_threshold= @saved_gr_compression_threshold;
-SET @@GLOBAL.group_replication_single_primary_mode= @saved_gr_single_primary_mode;
 SET @@GLOBAL.group_replication_force_members= @saved_gr_force_members;
 SET @@GLOBAL.group_replication_group_name= @saved_gr_group_name;
 SET @@GLOBAL.group_replication_gtid_assignment_block_size= @saved_gr_gtid_assignment_block_size;

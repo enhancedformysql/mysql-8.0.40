@@ -29,6 +29,9 @@
 #include "xcom/xcom_memory.h"
 #include "xcom/xcom_profile.h"
 
+/* Reasonable initial cache limit */
+#define DEFAULT_CACHE_LIMIT 1000000000ULL
+
 cfg_app_xcom_st *the_app_xcom_cfg = nullptr;
 
 void init_cfg_app_xcom() {
@@ -38,6 +41,7 @@ void init_cfg_app_xcom() {
   the_app_xcom_cfg->m_poll_spin_loops = 0;
   the_app_xcom_cfg->m_cache_limit = DEFAULT_CACHE_LIMIT;
   the_app_xcom_cfg->identity = nullptr;
+  memset(the_app_xcom_cfg->ip_port, 0, MAX_IP_PORT_LEN);
 }
 
 void deinit_cfg_app_xcom() {

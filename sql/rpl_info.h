@@ -79,6 +79,7 @@ class Rpl_info : public Slave_reporting_capability {
 
   bool inited;
   std::atomic<bool> abort_slave;
+  std::atomic<bool> abort_slave_expected;
   std::atomic<uint> slave_running;
   std::atomic<ulong> slave_run_id;
 

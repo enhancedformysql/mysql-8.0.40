@@ -26,13 +26,4 @@
 
 #include "plugin/group_replication/include/udf/udf_descriptor.h"
 
-/**
- * Returns the descriptor of the "group_replication_switch_to_multi_primary"
- * UDF.
- *
- * @returns the descriptor of the "group_replication_switch_to_multi_primary"
- * UDF
- */
-udf_descriptor switch_to_multi_primary_udf();
-
 #endif /* PLUGIN_GR_INCLUDE_UDF_MULTI_PRIMARY_H */

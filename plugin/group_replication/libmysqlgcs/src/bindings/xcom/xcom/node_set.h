@@ -24,10 +24,6 @@
 #ifndef NODE_SET_H
 #define NODE_SET_H
 
-#include "xdr_gen/xcom_vp.h"
-
-#define dbg_node_set(s) _dbg_node_set(s, #s)
-#define g_dbg_node_set(s) _g_dbg_node_set(s, #s)
 bool_t equal_node_set(node_set x, node_set y);
 bool_t is_empty_node_set(node_set set);
 bool_t is_full_node_set(node_set set);
@@ -35,13 +31,8 @@ bool_t is_set(node_set set, node_no i);
 u_int node_count(node_set set);
 node_set *alloc_node_set(node_set *set, u_int n);
 node_set *init_node_set(node_set *set, u_int n);
-node_set *reset_node_set(node_set *set);
 node_set *set_node_set(node_set *set);
-node_set bit_set_to_node_set(bit_set *set, u_int n);
 node_set clone_node_set(node_set set);
-char *_dbg_node_set(node_set set, const char *name);
-void _g_dbg_node_set(node_set set, const char *name);
-void add_node(node_set set, node_no node);
 void and_node_set(node_set *x, node_set const *y);
 void copy_node_set(node_set const *from, node_set *to);
 void copy_node_set(node_set const *from, node_set *to);
@@ -51,5 +42,5 @@ void or_node_set(node_set *x, node_set const *y);
 void remove_node(node_set set, node_no node);
 void xor_node_set(node_set *x, node_set const *y);
 node_set *realloc_node_set(node_set *set, u_int n);
-bool equal_node_set(node_set const *x, node_set const *y);
+
 #endif

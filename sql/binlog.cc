@@ -87,7 +87,6 @@
 #include "scope_guard.h"
 #include "sql/binlog/decompressing_event_object_istream.h"
 #include "sql/binlog/global.h"
-#include "sql/binlog/group_commit/bgc_ticket_manager.h"  // Bgc_ticket_manager
 #include "sql/binlog/recovery.h"  // binlog::Binlog_recovery
 #include "sql/binlog_ostream.h"
 #include "sql/binlog_reader.h"
@@ -156,6 +155,9 @@ using std::string;
  */
 
 #define MY_OFF_T_UNDEF (~(my_off_t)0UL)
+
+#define MAX_EVENT_BUFFER_SIZE 4194304
+#define MAX_EVENT_BUFFER_NUM 256
 
 /*
   Constants required for the limit unsafe warnings suppression
@@ -712,8 +714,7 @@ class binlog_cache_data {
   Binlog_cache_storage *get_cache() { return &m_cache; }
   int finalize(THD *thd, Log_event *end_event);
   int finalize(THD *thd, Log_event *end_event, XID_STATE *xs);
-  int flush(THD *thd, my_off_t *bytes, bool *wrote_xid,
-            bool parallelization_barrier);
+  int flush(THD *thd, my_off_t *bytes, bool *wrote_xid, bool parallelization_barrier);
   int write_event(Log_event *event);
   void set_event_counter(size_t event_counter) {
     m_event_counter = event_counter;
@@ -1653,16 +1654,12 @@ bool MYSQL_BIN_LOG::assign_automatic_gtids_to_flush_group(THD *first_seen) {
   @param thd Thread that is committing.
   @param cache_data The cache that is flushing.
   @param writer The event will be written to this Binlog_event_writer object.
-  @param parallelization_barrier The transaction is a parallelization_barrier
-  and the dependency tracker should mark subsequent transactions to depend on
-  it.
 
   @retval false Success.
   @retval true Error.
 */
 bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
-                                      Binlog_event_writer *writer,
-                                      bool parallelization_barrier) {
+                                      Binlog_event_writer *writer, bool parallelization_barrier) {
   DBUG_TRACE;
 
   /*
@@ -1674,8 +1671,7 @@ bool MYSQL_BIN_LOG::write_transaction(THD *thd, binlog_cache_data *cache_data,
 
   int64 sequence_number, last_committed;
   /* Generate logical timestamps for MTS */
-  m_dependency_tracker.get_dependency(thd, parallelization_barrier,
-                                      sequence_number, last_committed);
+  m_dependency_tracker.get_dependency(thd, parallelization_barrier, sequence_number, last_committed);
 
   /*
     In case both the transaction cache and the statement cache are
@@ -2389,8 +2385,7 @@ int binlog_cache_mngr::handle_deferred_cache_write_incident(THD *thd) {
 
   @see binlog_cache_data::finalize
  */
-int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written, bool *wrote_xid,
-                             bool parallelization_barrier) {
+int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written, bool *wrote_xid, bool parallelization_barrier) {
   /*
     Doing a commit or a rollback including non-transactional tables,
     i.e., ending a transaction where we might write the transaction
@@ -2452,8 +2447,7 @@ int binlog_cache_data::flush(THD *thd, my_off_t *bytes_written, bool *wrote_xid,
                     { DBUG_SET("+d,fault_injection_reinit_io_cache"); });
 
     if (!error)
-      if ((error = mysql_bin_log.write_transaction(thd, this, &writer,
-                                                   parallelization_barrier)))
+      if ((error = mysql_bin_log.write_transaction(thd, this, &writer, parallelization_barrier)))
         thd->commit_error = THD::CE_FLUSH_ERROR;
 
     DBUG_EXECUTE_IF("fault_injection_reinit_io_cache_while_flushing_to_file",
@@ -3687,8 +3681,7 @@ void MYSQL_BIN_LOG::init_pthread_objects() {
     Commit_stage_manager::get_instance().init(
         m_key_LOCK_flush_queue, m_key_LOCK_sync_queue, m_key_LOCK_commit_queue,
         m_key_LOCK_after_commit_queue, m_key_LOCK_done,
-        m_key_LOCK_wait_for_group_turn, m_key_COND_done, m_key_COND_flush_queue,
-        m_key_COND_wait_for_group_turn);
+        m_key_COND_done, m_key_COND_flush_queue);
   }
 }
 
@@ -7005,7 +6998,20 @@ bool MYSQL_BIN_LOG::write_buffer(const char *buf, uint len, Master_info *mi) {
   bool error = false;
   if (m_binlog_file->write(pointer_cast<const uchar *>(buf), len) == 0) {
     bytes_written += len;
-    error = after_write_to_relay_log(mi);
+    mi->total_events++;
+    if (!mi->io_buffered) {
+      error = after_write_to_relay_log(mi);
+      mi->io_buffered_cnt = 0;
+    } else {
+      mi->io_buffered_cnt++;
+      if (mi->io_buffered_cnt >= MAX_EVENT_BUFFER_NUM ||
+          len >= MAX_EVENT_BUFFER_SIZE) {
+        error = after_write_to_relay_log(mi);
+        mi->io_buffered_cnt = 0;
+      } else {
+        mi->total_buffered_events++;
+      }
+    }
   } else {
     mi->report(ERROR_LEVEL, ER_REPLICA_RELAY_LOG_WRITE_FAILURE,
                ER_THD(current_thd, ER_REPLICA_RELAY_LOG_WRITE_FAILURE),
@@ -8374,8 +8380,11 @@ void MYSQL_BIN_LOG::init_thd_variables(THD *thd, bool all, bool skip_commit) {
       ha_commit_low since that calls Transaction_ctx::cleanup.
   */
   thd->tx_commit_pending = true;
+  thd->tx_commit_signal_independently = false;
   thd->commit_error = THD::CE_NONE;
   thd->next_to_commit = nullptr;
+  mysql_cond_init(0, &thd->thr_cond_lock);
+  thd->thr_cond_lock_inited = true;
   thd->durability_property = HA_IGNORE_DURABILITY;
   thd->get_transaction()->m_flags.real_commit = all;
   thd->get_transaction()->m_flags.xid_written = false;
@@ -8473,6 +8482,7 @@ int MYSQL_BIN_LOG::process_flush_stage_queue(my_off_t *total_bytes_var,
 #ifndef NDEBUG
   DBUG_PRINT("info", ("no_flushes:= %d", no_flushes));
 #endif
+
   return flush_error;
 }
 
@@ -8835,14 +8845,6 @@ int MYSQL_BIN_LOG::ordered_commit(THD *thd, bool all, bool skip_commit) {
   int flush_error = 0, sync_error = 0;
   my_off_t total_bytes = 0;
 
-  CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_assign_session_to_bgc_ticket");
-  thd->rpl_thd_ctx.binlog_group_commit_ctx().assign_ticket();
-
-  DBUG_EXECUTE_IF("syncpoint_before_wait_on_ticket_3",
-                  binlog::Bgc_ticket_manager::instance().push_new_ticket(););
-  DBUG_EXECUTE_IF("begin_new_bgc_ticket",
-                  binlog::Bgc_ticket_manager::instance().push_new_ticket(););
-
   DBUG_EXECUTE_IF("crash_commit_before_log", DBUG_SUICIDE(););
   init_thd_variables(thd, all, skip_commit);
   DBUG_PRINT("enter", ("commit_pending: %s, commit_error: %d, thread_id: %u",
@@ -9083,7 +9085,7 @@ commit_stage:
   if (sync_error)
     handle_binlog_flush_or_sync_error(thd, true /* need_lock_log */, nullptr);
 
-  /* Extract the rotate settings of all thread before signal done */
+    /* Extract the rotate settings of all thread before signal done */
   const auto [check_rotate, force_rotate] =
       Binlog_group_commit_ctx::aggregate_rotate_settings(final_queue);
 
@@ -9104,9 +9106,10 @@ commit_stage:
   DEBUG_SYNC(thd, "bgc_after_commit_stage_before_rotation");
 
   /*
-    If we need to rotate, we do it without commit error.
-    Otherwise the thd->commit_error will be possibly reset.
+     If we need to rotate, we do it without commit error.
+     Otherwise the thd->commit_error will be possibly reset.
    */
+
   if (DBUG_EVALUATE_IF("force_rotate", 1, 0) || force_rotate ||
       (check_rotate && thd->commit_error == THD::CE_NONE)) {
     /*
@@ -9134,6 +9137,7 @@ commit_stage:
     else if (check_purge)
       auto_purge();
   }
+
   /*
     flush or sync errors are handled above (using binlog_error_action).
     Hence treat only COMMIT_ERRORs as errors.

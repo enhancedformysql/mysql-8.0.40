@@ -231,34 +231,15 @@ bool get_group_member_stats(
       (pipeline_stats =
            ((local_member_info && !local_member_info->get_uuid().compare(uuid))
                 ? applier_module->get_local_pipeline_stats()
-                : applier_module->get_flow_control_module()->get_pipeline_stats(
+                : applier_module->get_flow_stat_module()->get_pipeline_stats(
                       member_info.get_gcs_member_id().get_member_id()))) !=
           nullptr) {
-    std::string last_conflict_free_transaction;
-    pipeline_stats->get_transaction_last_conflict_free(
-        last_conflict_free_transaction);
-    callbacks.set_last_conflict_free_transaction(
-        callbacks.context, *last_conflict_free_transaction.c_str(),
-        last_conflict_free_transaction.length());
-
     std::string transaction_committed_all_members;
     pipeline_stats->get_transaction_committed_all_members(
         transaction_committed_all_members);
     callbacks.set_transactions_committed(
         callbacks.context, *transaction_committed_all_members.c_str(),
         transaction_committed_all_members.length());
-
-    /* certification related data */
-    callbacks.set_transactions_conflicts_detected(
-        callbacks.context,
-        pipeline_stats->get_transactions_negative_certified());
-    callbacks.set_transactions_certified(
-        callbacks.context, pipeline_stats->get_transactions_certified());
-    callbacks.set_transactions_rows_in_validation(
-        callbacks.context, pipeline_stats->get_transactions_rows_validating());
-    callbacks.set_transactions_in_queue(
-        callbacks.context,
-        pipeline_stats->get_transactions_waiting_certification());
 
     /* applier information */
     callbacks.set_transactions_remote_applier_queue(
@@ -269,8 +250,6 @@ bool get_group_member_stats(
     /* local member information */
     callbacks.set_transactions_local_proposed(
         callbacks.context, pipeline_stats->get_transactions_local());
-    callbacks.set_transactions_local_rollback(
-        callbacks.context, pipeline_stats->get_transactions_local_rollback());
 
     /* clean-up */
     delete pipeline_stats;

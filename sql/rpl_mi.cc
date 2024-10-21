@@ -220,6 +220,9 @@ Master_info::Master_info(
   start_plugin_dir[0] = 0;
   start_user[0] = 0;
   public_key_path[0] = 0;
+  total_events = 0;
+  total_buffered_events = 0;
+  io_buffered = 0;
   ignore_server_ids = new Server_ids;
   strcpy(compression_algorithm, COMPRESSION_ALGORITHM_UNCOMPRESSED);
   zstd_compression_level = default_zstd_compression_level;

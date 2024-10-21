@@ -458,14 +458,12 @@ class Gcs_xcom_control : public Gcs_control_interface {
     @param[in] message_id the message that conveys the View Change
     @param[in] xcom_nodes Set of nodes that participated in the consensus
                             to deliver the message
-    @param[in] do_not_deliver_to_client  Whether to filter this view from being
-                                         delivered to the client
+    @param[in] same_view  Whether this global view was already delivered.
     @param[in] max_synode XCom max synode
   */
 
   bool xcom_receive_global_view(synode_no const config_id, synode_no message_id,
-                                Gcs_xcom_nodes *xcom_nodes,
-                                bool do_not_deliver_to_client,
+                                Gcs_xcom_nodes *xcom_nodes, bool same_view,
                                 synode_no max_synode);
 
   /*
@@ -509,8 +507,6 @@ class Gcs_xcom_control : public Gcs_control_interface {
       Gcs_message *msg, Gcs_protocol_version maximum_supported_protocol_version,
       Gcs_protocol_version used_protocol_version);
 
-  std::map<int, const Gcs_control_event_listener &> *get_event_listeners();
-
   /**
     Return the address associated with the current node.
   */
@@ -551,14 +547,6 @@ class Gcs_xcom_control : public Gcs_control_interface {
   */
 
   void clear_peer_nodes();
-
-  /**
-    Return a pointer to a socket utility.
-
-    @return a pointer to a socket utility
-  */
-
-  My_xp_socket_util *get_socket_util();
 
   /**
     This member function can be used to wait until xcom thread exits.

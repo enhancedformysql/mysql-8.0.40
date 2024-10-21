@@ -37,13 +37,9 @@ struct msg_link {
 typedef struct msg_link msg_link;
 
 msg_link *msg_link_new(pax_msg *p, node_no to);
-char *dbg_msg_link(msg_link *link);
 void empty_link_free_list();
 void empty_msg_channel(channel *c);
 void empty_msg_list(linkage *l);
 void init_link_list();
 void msg_link_delete(msg_link **link_p);
-void shrink_msg_list(linkage *l, int n);
-void shrink_msg_channel(channel *c, int n);
-
 #endif

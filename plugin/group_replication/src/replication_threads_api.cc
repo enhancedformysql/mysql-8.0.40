@@ -198,8 +198,9 @@ bool Replication_thread_api::is_applier_thread_stopping() {
   return (channel_is_stopping(interface_channel, CHANNEL_APPLIER_THREAD));
 }
 
-int Replication_thread_api::queue_packet(const char *buf, ulong event_len) {
-  return channel_queue_packet(interface_channel, buf, event_len);
+int Replication_thread_api::queue_packet(const char *buf, ulong event_len,
+                                         bool io_buffered) {
+  return channel_queue_packet(interface_channel, buf, event_len, io_buffered);
 }
 
 bool Replication_thread_api::is_applier_thread_waiting() {

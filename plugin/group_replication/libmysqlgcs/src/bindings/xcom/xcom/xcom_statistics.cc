@@ -33,7 +33,6 @@
 #endif
 #include "xcom/simset.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/x_platform.h"
 #include "xcom/xcom_statistics.h"
 #include "xcom/xcom_vp_str.h"

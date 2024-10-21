@@ -14,9 +14,6 @@
 #   $rpl_server_count
 #     See include/master-slave.inc
 #
-#   $reset_single_primary_mode
-#     To check whether we are going to set or
-#     reset the single primary mode configuration
 #
 
 --let $include_filename= single_primary_mode.inc
@@ -51,18 +48,6 @@ while ($_i_set_single_primary_mode <= $rpl_server_count)
   if ($_is_plugin_running)
   {
     --die "Cannot set/reset single primary mode while the plugin is running!"
-  }
-
-  if (!$reset_single_primary_mode)
-  {
-    SET GLOBAL group_replication_enforce_update_everywhere_checks= FALSE;
-    SET GLOBAL group_replication_single_primary_mode= TRUE;
-  }
-
-  if ($reset_single_primary_mode)
-  {
-    SET GLOBAL group_replication_single_primary_mode= FALSE;
-    SET GLOBAL group_replication_enforce_update_everywhere_checks= TRUE;
   }
 
   --connection default

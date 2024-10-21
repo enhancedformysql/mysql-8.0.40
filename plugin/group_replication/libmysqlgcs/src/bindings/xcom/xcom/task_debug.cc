@@ -24,13 +24,13 @@
 #ifdef _MSC_VER
 #include <stdint.h>
 #endif
-#include "xcom/task_debug.h"
 
 #include <assert.h>
 #include <stdarg.h>
 #include <stdio.h>
 
-/* purecov: begin deadcode */
+#include "xcom/task_debug.h"
+
 static int mystrcat_core_sprintf(char *dest, int size, const char *format,
                                  va_list args)
     MY_ATTRIBUTE((format(printf, 3, 0)));
@@ -56,20 +56,17 @@ char *mystrcat(char *dest, int *size, const char *src) {
 
   return ret;
 }
-/* purecov: end */
 
 static int mystrcat_core_sprintf(char *dest, int size, const char *format,
                                  va_list args) {
   int remaining_size = STR_SIZE - size;
   int ret = vsnprintf(dest, (size_t)remaining_size, format, args);
   if (ret > remaining_size) {
-    /* purecov: begin deadcode */
     fprintf(stderr,
             "ERROR: mystrcat_sprintf wasn't able to add \"%s\" to "
             "destination string! Full buffer!\n",
             format);
     ret = remaining_size;
-    /* purecov: end */
   }
 
   return ret;

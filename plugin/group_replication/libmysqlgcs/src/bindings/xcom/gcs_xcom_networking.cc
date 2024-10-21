@@ -39,9 +39,9 @@
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/sock_probe.h"
 
 #if defined(_WIN32)
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/sock_probe_win32.h"
+#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/sock_probe_win32.cc"
 #else
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/sock_probe_ix.h"
+#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/sock_probe_ix.cc"
 #endif
 
 /**
@@ -569,21 +569,6 @@ std::vector<std::pair<std::vector<unsigned char>, std::vector<unsigned char>>>
   return retval;
 }
 
-/* purecov: begin deadcode */
-std::string Gcs_ip_allowlist::to_string() const {
-  std::set<Gcs_ip_allowlist_entry *>::const_iterator wl_it;
-  std::stringstream ss;
-
-  for (wl_it = m_ip_allowlist.begin(); wl_it != m_ip_allowlist.end(); wl_it++) {
-    ss << (*wl_it)->get_addr() << "/" << (*wl_it)->get_mask() << ",";
-  }
-
-  std::string res = ss.str();
-  res.erase(res.end() - 1);
-  return res;
-}
-/* purecov: end */
-
 bool Gcs_ip_allowlist::is_valid(const std::string &the_list) {
   // lock the list
   Atomic_lock_guard guard{m_atomic_guard};
@@ -729,14 +714,12 @@ bool get_address_for_allowlist(
       netbits = mask.empty() ? 32 : atoi(mask.c_str());
       break;
 
-      /* purecov: begin deadcode */
     case AF_INET6:
       sock = (unsigned char *)&((struct sockaddr_in6 *)&sa)->sin6_addr;
       ssock.assign(sock, sock + sizeof(struct in6_addr));
       netmask_len = sizeof(struct in6_addr);
       netbits = mask.empty() ? 128 : atoi(mask.c_str());
       break;
-      /* purecov: end */
     default:
       return true;
   }

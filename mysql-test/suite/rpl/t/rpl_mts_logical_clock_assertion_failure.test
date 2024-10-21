@@ -102,7 +102,7 @@ SET debug = '-d,logical_clock_step_2';
 # Make sure coordinator is waiting for a commit parent and
 # guaratee min_waited_timestamp is set to a valid timestamp
 --source include/rpl_connection_slave.inc
---let $wait_condition = SELECT count(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE state = 'Waiting for dependent transaction to commit'
+--let $wait_condition = SELECT count(*) = 1 FROM INFORMATION_SCHEMA.PROCESSLIST WHERE state = 'Waiting for replica workers to process their queues'
 --source include/wait_condition.inc
 
 # It will pause the worker after it read min_waited_timestamp

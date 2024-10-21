@@ -27,7 +27,6 @@ reserved.
 
 #include "xcom/site_def.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/task_net.h"
 #include "xcom/task_os.h"
 #include "xcom/x_platform.h"
@@ -40,22 +39,10 @@ reserved.
 #endif  // WIN32
 
 #ifndef _WIN32
+#include <arpa/inet.h>
+#include <netdb.h>
 #include <poll.h>
 #endif
-
-static inline void dump_error(int err) {
-  if (err) {
-#ifndef XCOM_WITHOUT_OPENSSL
-    if (is_ssl_err(err)) {
-      IFDBG(D_BUG, FN; NDBG(from_ssl_err(err), d));
-    } else {
-#endif
-      IFDBG(D_BUG, FN; NDBG(from_errno(err), d); STREXP(strerror(err)));
-#ifndef XCOM_WITHOUT_OPENSSL
-    }
-#endif
-  }
-}
 
 static xcom_socket_accept_cb xcom_socket_accept_callback = nullptr;
 int set_xcom_socket_accept_cb(xcom_socket_accept_cb x) {
@@ -117,11 +104,37 @@ result Xcom_network_provider_library::xcom_checked_socket(int domain, int type,
     ret.val = (int)socket(domain, type, protocol);
     ret.funerr = to_errno(GET_OS_ERR);
   } while (--retry && ret.val == -1 && (from_errno(ret.funerr) == SOCK_EAGAIN));
-  if (ret.val == -1) {
-    task_dump_err(ret.funerr);
-  }
   return ret;
 }
+
+bool retrieve_addr_from_fd(int fd, bool client, char *ip, int *port) {
+  struct sockaddr_storage server;
+  memset(&server, 0, sizeof(struct sockaddr_storage));
+  socklen_t len = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
+  if (client) {
+    if (xcom_getpeername(fd, (struct sockaddr *)&server, &len)) {
+      return false;
+    }
+  } else {
+    if (getsockname(fd, (struct sockaddr *)&server, &len)) {
+      return false;
+    }
+  }
+
+  if (server.ss_family == AF_INET) {
+    struct sockaddr_in *s = (struct sockaddr_in *)&server;
+    inet_ntop(AF_INET, (void *)&(s->sin_addr), ip, INET_ADDRSTRLEN);
+    *port = ntohs(s->sin_port);
+  } else {
+    struct sockaddr_in6 *s = (struct sockaddr_in6 *)&server;
+    inet_ntop(AF_INET6, (void *)&(s->sin6_addr), ip, INET6_ADDRSTRLEN);
+    *port = ntohs(s->sin6_port);
+  }
+
+  return true;
+}
+
+
 
 result Xcom_network_provider_library::create_server_socket() {
   result fd = {0, 0};
@@ -173,7 +186,6 @@ result Xcom_network_provider_library::create_server_socket() {
   return fd;
 }
 
-/* purecov: begin deadcode */
 result Xcom_network_provider_library::create_server_socket_v4() {
   result fd = {0, 0};
   /* Create socket */
@@ -202,7 +214,6 @@ result Xcom_network_provider_library::create_server_socket_v4() {
   }
   return fd;
 }
-/* purecov: end */
 
 result Xcom_network_provider_library::announce_tcp(xcom_port port) {
   result fd;
@@ -219,13 +230,11 @@ result Xcom_network_provider_library::announce_tcp(xcom_port port) {
   fd.val = -1;
 #endif
   if (fd.val < 0) {
-    /* purecov: begin deadcode */
     // If the OS does not support IPv6, we fall back to IPv4.
     fd = create_server_socket_v4();
     if (fd.val < 0) {
       return fd;
     }
-    /* purecov: end */
   } else {
     server_socket_v6_ok = 1;
   }
@@ -234,7 +243,6 @@ result Xcom_network_provider_library::announce_tcp(xcom_port port) {
   if (sock_addr == nullptr || (bind(fd.val, sock_addr, sock_addr_len) < 0)) {
     // If we fail to bind to the desired address, we fall back to an
     // IPv4 socket.
-    /* purecov: begin deadcode */
     fd = create_server_socket_v4();
     free(sock_addr);
     sock_addr = nullptr;
@@ -251,11 +259,8 @@ result Xcom_network_provider_library::announce_tcp(xcom_port port) {
       fd.val = -1;
       goto err;
     }
-    /* purecov: end */
   }
 
-  G_DEBUG("Successfully bound to %s:%d (socket=%d).", "INADDR_ANY", port,
-          fd.val);
   if (listen(fd.val, 32) < 0) {
     G_MESSAGE(
         "Unable to listen backlog to 32. "
@@ -263,15 +268,12 @@ result Xcom_network_provider_library::announce_tcp(xcom_port port) {
         fd.val, to_errno(GET_OS_ERR));
     goto err;
   }
-  G_DEBUG("Successfully set listen backlog to 32 (socket=%d)!", fd.val);
 
   free(sock_addr);
   return fd;
 
 err:
   fd.funerr = to_errno(GET_OS_ERR);
-  dump_error(fd.funerr);
-
   if (fd.val > 0) {
     connection_descriptor cd;
     cd.fd = fd.val;
@@ -367,10 +369,6 @@ int Xcom_network_provider_library::timed_connect_msec(
       case SOCK_EALREADY:
         break;
       default:
-        G_DEBUG(
-            "connect - Error connecting "
-            "(socket=%d, error=%d).",
-            fd, GET_OS_ERR);
         CONNECT_FAIL;
     }
 
@@ -397,19 +395,10 @@ int Xcom_network_provider_library::timed_connect_msec(
     }
 
     if (sysret == 0) {
-      G_DEBUG(
-          "Timed out while waiting for connection to be established! "
-          "Cancelling connection attempt. (socket= %d, error=%d)",
-          fd, sysret);
-      /* G_WARNING("poll - Timeout! Cancelling connection..."); */
       CONNECT_FAIL;
     }
 
     if (is_socket_error(sysret)) {
-      G_DEBUG(
-          "poll - Error while connecting! "
-          "(socket= %d, error=%d)",
-          fd, GET_OS_ERR);
       CONNECT_FAIL;
     }
 
@@ -426,12 +415,9 @@ int Xcom_network_provider_library::timed_connect_msec(
       }
       if (getsockopt(fd, SOL_SOCKET, SO_ERROR, (xcom_buf *)&socket_errno,
                      &socket_errno_len) != 0) {
-        G_DEBUG("getsockopt socket %d failed.", fd);
         ret_fd = -1;
       } else {
         if (socket_errno != 0) {
-          G_DEBUG("Connection to socket %d failed with error %d.", fd,
-                  socket_errno);
           ret_fd = -1;
         }
       }
@@ -442,10 +428,6 @@ end:
   /* Set blocking */
   SET_OS_ERR(0);
   if (block_fd(fd) < 0) {
-    G_DEBUG(
-        "Unable to set socket back to blocking state. "
-        "(socket=%d, error=%d).",
-        fd, GET_OS_ERR);
     return -1;
   }
   return ret_fd;
@@ -454,17 +436,8 @@ end:
 int Xcom_network_provider_library::timed_connect(int fd,
                                                  struct sockaddr *sock_addr,
                                                  socklen_t sock_size) {
-  return timed_connect_msec(fd, sock_addr, sock_size, 10000);
+  return timed_connect_msec(fd, sock_addr, sock_size, 5000);
 }
-
-/* purecov: begin deadcode */
-int Xcom_network_provider_library::timed_connect_sec(int fd,
-                                                     struct sockaddr *sock_addr,
-                                                     socklen_t sock_size,
-                                                     int timeout) {
-  return timed_connect_msec(fd, sock_addr, sock_size, timeout * 1000);
-}
-/* purecov: end */
 
 result Xcom_network_provider_library::checked_create_socket(int domain,
                                                             int type,
@@ -481,7 +454,6 @@ result Xcom_network_provider_library::checked_create_socket(int domain,
            (from_errno(retval.funerr) == SOCK_EAGAIN));
 
   if (retval.val == -1) {
-    task_dump_err(retval.funerr);
 #if defined(_WIN32)
     G_MESSAGE("Socket creation failed with error: %d", retval.funerr);
 #else

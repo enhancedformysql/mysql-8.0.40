@@ -20,7 +20,6 @@ include/start_group_replication.inc
 
 # 4. Lock table on the new primary (server 2)
 [connection server_2]
-LOCK TABLE t1 READ;
 
 # 5. Execute a transaction that will stuck
 [connection server1]
@@ -28,20 +27,14 @@ INSERT INTO t1 VALUES (1);
 
 # 6. Stop server1
 include/stop_group_replication.inc
-
-# 7. Server2 will wait for buffered transactions on read only mode
 [connection server2]
 
-# 8. Unlock table on server2
-[connection server_2]
-UNLOCK TABLES;
+# 7. Server2 will apply buffered transactions and disable read only mode
 
-# 9. Server2 will apply buffered transactions and disable read only mode
-
-# 10. Assert server2 is primary server
+# 8. Assert server2 is primary server
 include/gr_assert_primary_member.inc
 
-# 11. Cleanup
+# 9. Cleanup
 [connection server1]
 include/start_group_replication.inc
 [connection server2]

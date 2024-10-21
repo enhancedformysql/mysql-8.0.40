@@ -35,11 +35,10 @@
 char *dbg_linkage(linkage *self) {
   GET_NEW_GOUT;
   PTREXP(self);
-  NDBG(self->type, u);
-  NDBG(cardinal(self), d);
   PTREXP(self->suc);
   PTREXP(self->pred);
   FWD_ITER(self, linkage, STRLIT("->"); PTREXP(link_iter);
            PTREXP(link_iter->suc); PTREXP(link_iter->pred));
   RET_GOUT;
 }
+/* purecov: end */

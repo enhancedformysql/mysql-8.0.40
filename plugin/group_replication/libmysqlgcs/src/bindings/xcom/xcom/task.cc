@@ -43,7 +43,6 @@
 #include <stdint.h>
 #endif
 #include "xcom/x_platform.h"
-#include "xcom/xcom_memory.h"
 #include "xcom/xcom_profile.h"
 
 #ifndef XCOM_WITHOUT_OPENSSL
@@ -73,15 +72,12 @@
 #include <sys/types.h>
 #include <time.h>
 
-#include <memory>
-
 #include "xcom/node_connection.h"
 #include "xdr_gen/xcom_vp.h"
 
 #include "xcom/simset.h"
 #include "xcom/site_def.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/task_net.h"
 #include "xcom/task_os.h"
 #include "xcom/xcom_base.h"
@@ -102,7 +98,6 @@
 #endif
 
 extern const char *pax_op_to_str(int x);
-extern uint32_t get_my_xcom_id();
 
 task_arg null_arg = {a_end, {0}};
 
@@ -341,46 +336,21 @@ int gettimeofday(struct timeval *tp, struct timezone *) {
 }
 #endif
 
-#ifdef NOTDEF
-static void task_queue_init(task_queue *q) { q->curn = 0; }
-
-static void task_queue_debug(task_queue *q) {
-  int i;
-  GET_GOUT;
-  if (!IS_XCOM_DEBUG_WITH(XCOM_DEBUG_TRACE)) return;
-  STRLIT("task_queue_debug ");
-  for (i = 1; i <= q->curn; i++) {
-    NDBG(i, d);
-    PTREXP(q->x[i]);
-    STREXP(q->x[i]->name);
-    NDBG(q->x[i]->heap_pos, d);
-    NDBG(q->x[i]->terminate, d);
-    NDBG(q->x[i]->time, f);
+unsigned long long int get_micro_time() {
+#ifdef _WIN32
+  return std::chrono::duration_cast<std::chrono::microseconds>(
+             UTC_clock::now().time_since_epoch())
+      .count();
+#else
+  struct timeval t;
+  /*
+  The following loop is here because gettimeofday may fail on some systems
+  */
+  while (gettimeofday(&t, nullptr) != 0) {
   }
-  PRINT_GOUT;
-  FREE_GOUT;
+  return (static_cast<unsigned long long int>(t.tv_sec) * 1000000 + t.tv_usec);
+#endif /* _WIN32 */
 }
-
-static int is_heap(task_queue *q) {
-  if (q->curn) {
-    int i;
-    for (i = q->curn; i > 1; i--) {
-      if ((q->x[i]->time < q->x[i / 2]->time) || (q->x[i]->heap_pos != i)) {
-        task_queue_debug(q);
-        return 0;
-      }
-    }
-    if (q->x[1]->heap_pos != 1) {
-      task_queue_debug(q);
-      return 0;
-    }
-  }
-  return 1;
-}
-
-static int task_queue_full(task_queue *q) { return q->curn >= MAXTASKS; }
-
-#endif
 
 #define FIX_POS(i) q->x[i]->heap_pos = (i)
 /* #define TASK_SWAP(x,y) { task_env *tmp = (x); (x) = (y); (y) = (tmp); } */
@@ -440,7 +410,6 @@ static task_env *task_queue_remove(task_queue *q, int i) {
   /* The element at index 0 is never part of the queue */
   if (0 == i) return nullptr;
   assert(q->curn);
-  IFDBG(D_NONE, FN; STRLIT("task_queue_remove "); NDBG(i, d));
   TASK_MOVE(i, q->curn); /* Fill the hole */
   q->curn--;             /* Heap is now smaller */
                          /* Re-establish heap property */
@@ -470,9 +439,6 @@ static void task_queue_insert(task_queue *q, task_env *t) {
 }
 
 static int task_queue_empty(task_queue *q) {
-#ifdef DEBUG_TASKS
-  IFDBG(D_NONE, FN; PTREXP(q));
-#endif
   return q->curn < 1;
 }
 
@@ -529,8 +495,6 @@ static linkage free_tasks = {0, &free_tasks, &free_tasks};
 /* Basic operations on tasks */
 static task_env *activate(task_env *t) {
   if (t) {
-    IFDBG(D_NONE, FN; STRLIT("activating task "); PTREXP(t); STREXP(t->name);
-          NDBG(t->heap_pos, d); NDBG(t->time, f););
     assert(ash_nazg_gimbatul.type == TYPE_HASH("task_env"));
     if (t->heap_pos) task_queue_remove(&task_time_q, t->heap_pos);
     link_into(&t->l, &tasks);
@@ -560,7 +524,6 @@ void task_delay_until(double time) {
 /* Wait queues */
 void task_wait(task_env *t, linkage *queue) {
   if (t) {
-    TASK_DEBUG("task_wait");
     deactivate(t);
     link_into(&t->l, queue);
   }
@@ -571,7 +534,6 @@ void task_wakeup(linkage *queue) {
   assert(queue != &tasks);
   while (!link_empty(queue)) {
     activate(container_of(link_extract_first(queue), task_env, l));
-    TASK_DEBUG("task_wakeup");
   }
 }
 
@@ -580,7 +542,6 @@ static void task_wakeup_first(linkage *queue) {
   assert(queue != &tasks);
   if (!link_empty(queue)) {
     activate(container_of(link_extract_first(queue), task_env, l));
-    TASK_DEBUG("task_wakeup_first");
   }
 }
 
@@ -592,7 +553,6 @@ channel *channel_init(channel *c, unsigned int type) {
 }
 
 void channel_put(channel *c, linkage *data) {
-  IFDBG(D_NONE, FN; PTREXP(data); PTREXP(&c->data));
   link_into(data, &c->data);
   task_wakeup_first(&c->queue);
 }
@@ -606,10 +566,9 @@ static int active_tasks = 0;
 task_env *task_new(task_func func, task_arg arg, const char *name, int debug) {
   task_env *t;
   if (link_empty(&free_tasks))
-    t = (task_env *)xcom_malloc(sizeof(task_env));
+    t = (task_env *)malloc(sizeof(task_env));
   else
     t = container_of(link_extract_first(&free_tasks), task_env, l);
-  IFDBG(D_NONE, FN; PTREXP(t); STREXP(name); NDBG(active_tasks, d););
   task_init(t);
   t->func = func;
   t->arg = arg;
@@ -630,7 +589,6 @@ void *task_allocate(task_env *p, unsigned int bytes) {
       (unsigned int)((bytes + sizeof(TaskAlign) - 1) / sizeof(TaskAlign));
   TaskAlign *ret;
   /* Check if there is space */
-  TASK_DEBUG("task_allocate");
   if ((p->where + alloc_units) <= (p->stack_top)) {
     ret = p->where;
     p->where += alloc_units;
@@ -644,7 +602,6 @@ void *task_allocate(task_env *p, unsigned int bytes) {
 
 void reset_state(task_env *p) {
   if ((p->where) <= (p->stack_top - 1)) {
-    TASK_DEBUG("reset_state");
     p->stack_top[-1].state = 0;
   } else {
     abort();
@@ -656,7 +613,6 @@ void pushp(task_env *p, void *ptr) {
   if ((p->where) <= (p->stack_top - 1)) {
     p->stack_top->ptr = ptr;
     p->stack_top--;
-    TASK_DEBUG("pushp");
   } else {
     abort();
   }
@@ -664,7 +620,6 @@ void pushp(task_env *p, void *ptr) {
 
 void popp(task_env *p) {
   if (p->stack_top < &p->buf[TASK_POOL_ELEMS]) {
-    TASK_DEBUG("popp");
     p->stack_top++;
   } else {
     abort();
@@ -674,15 +629,10 @@ void popp(task_env *p) {
 static int runnable_tasks() { return !link_empty(&tasks); }
 
 static int delayed_tasks() {
-#ifdef DEBUG_TASKS
-  IFDBG(D_NONE, FN; PTREXP(&task_time_q));
-#endif
   return !task_queue_empty(&task_time_q);
 }
 
 static void task_delete(task_env *t) {
-  IFDBG(D_NONE, FN; PTREXP(t); STREXP(t->name); NDBG(t->refcnt, d);
-        NDBG(active_tasks, d););
   link_out(&t->all); /* Remove task from list of all tasks */
 #if 1
   free(deactivate(t)); /* Deactivate and free task */
@@ -718,12 +668,8 @@ task_env *task_deactivate(task_env *t) { return deactivate(t); }
 /* Set terminate flag and activate task */
 task_env *task_terminate(task_env *t) {
   if (t) {
-    IFDBG(D_NONE, FN; STRLIT("terminating "); PTREXP(t); STREXP(t->name);
-          NDBG(t->refcnt, d));
     t->terminate = KILL; /* Set terminate flag */
     activate(t);         /* and get it running */
-    IFDBG(D_NONE, FN; STRLIT("terminated "); PTREXP(t); STREXP(t->name);
-          NDBG(t->refcnt, d));
   }
   return t;
 }
@@ -753,14 +699,12 @@ static task_env *extract_first_delayed() {
 static iotasks iot;
 
 static void iotasks_init(iotasks *iot_to_init) {
-  IFDBG(D_NONE, FN);
   iot_to_init->nwait = 0;
   init_pollfd_array(&iot_to_init->fd);
   init_task_env_p_array(&iot_to_init->tasks);
 }
 
 static void iotasks_deinit(iotasks *iot_to_deinit) {
-  IFDBG(D_NONE, FN);
   iot_to_deinit->nwait = 0;
   free_pollfd_array(&iot_to_deinit->fd);
   free_task_env_p_array(&iot_to_deinit->tasks);
@@ -779,16 +723,12 @@ static int poll_wait(int ms) {
   int wake = 0;
 
   /* Wait at most ms milliseconds */
-  IFDBG(D_NONE, FN; NDBG(ms, d));
   if (ms < 0 || ms > 1000) ms = 1000; /* Wait at most 1000 ms */
   SET_OS_ERR(0);
   while ((nfds.val = poll(iot.fd.pollfd_array_val, iot.nwait, ms)) == -1) {
     /* purecov: begin inspected */
     nfds.funerr = to_errno(GET_OS_ERR);
     if (!can_retry(nfds.funerr)) {
-      task_dump_err(nfds.funerr);
-      DBGOUT(FN; STRLIT("poll failed "); NUMEXP(nfds.val); NUMEXP(nfds.funerr);
-             NUMEXP(iot.nwait));
       break;
       /* abort(); */
     }
@@ -805,11 +745,6 @@ static int poll_wait(int ms) {
       if (interrupt || /* timeout ? */
           get_pollfd(&iot.fd, i).revents) {
         if (get_pollfd(&iot.fd, i).revents & POLLERR) {
-          DBGOUT(FN; STRLIT("IO failed POLLERR "); NUMEXP(i);
-                 NUMEXP(get_pollfd(&iot.fd, i).fd);
-                 NUMEXP(get_pollfd(&iot.fd, i).events);
-                 NUMEXP(get_pollfd(&iot.fd, i).revents); NUMEXP(i);
-                 NUMEXP(iot.nwait););
         }
         get_task_env_p(&iot.tasks, i)->interrupt = interrupt;
         poll_wakeup(i);
@@ -824,7 +759,6 @@ static int poll_wait(int ms) {
 
 static void add_fd(task_env *t, int fd, int op) {
   short events = 'r' == op ? POLLIN | POLLRDNORM : POLLOUT;
-  IFDBG(D_NONE, FN; PTREXP(t); NDBG(fd, d); NDBG(op, d));
   assert(fd >= 0);
   t->waitfd = fd;
   deactivate(t);
@@ -863,7 +797,6 @@ static void wake_all_io() {
 
 void remove_and_wakeup(int fd) {
   u_int i = 0;
-  IFDBG(D_NONE, FN; NDBG(fd, d));
   while (i < iot.nwait) {
     if (static_cast<int>(get_pollfd(&iot.fd, i).fd) == fd) {
       poll_wakeup(i);
@@ -877,6 +810,13 @@ task_env *stack = nullptr;
 
 task_env *wait_io(task_env *t, int fd, int op) {
   t->time = 0.0;
+  t->interrupt = 0;
+  add_fd(deactivate(t), fd, op);
+  return t;
+}
+
+task_env *timed_wait_io(task_env *t, int fd, int op, double timeout) {
+  t->time = task_now() + timeout;
   t->interrupt = 0;
   add_fd(deactivate(t), fd, op);
   return t;
@@ -945,7 +885,6 @@ int task_read(connection_descriptor const *con, void *buf, int n, int64_t *ret,
   assert(n >= 0);
 
   TASK_BEGIN
-  IFDBG(D_NONE, FN; PTREXP(stack); NDBG(con->fd, d); PTREXP(buf); NDBG(n, d));
 
   for (;;) {
     if (con->fd <= 0) TASK_FAIL;
@@ -953,19 +892,14 @@ int task_read(connection_descriptor const *con, void *buf, int n, int64_t *ret,
     sock_ret = read_function(con, buf, n);
 
     *ret = sock_ret.val;
-    IFDBG(D_TRANSPORT, FN; NDBG(con->fd, d); NDBG(n, d); NDBG(sock_ret.val, d);
-          NDBG(sock_ret.funerr, d););
     if (sock_ret.val >= 0) /* OK */
       break;
     /* If we get here, we have an error, see if we can retry, and fail if not */
     if (!can_retry_read(sock_ret.funerr)) {
-      IFDBG(D_BUG, FN; PTREXP(stack); NDBG(con->fd, d); PTREXP(buf);
-            NDBG(n, d));
       TASK_FAIL;
     }
     wait_io(stack, con->fd, 'r');
     TASK_YIELD;
-    IFDBG(D_NONE, FN; PTREXP(stack); NDBG(con->fd, d); PTREXP(buf); NDBG(n, d));
   }
 
   FINALLY
@@ -1035,7 +969,6 @@ int task_write(connection_descriptor const *con, void *_buf, uint32_t n,
   ep->total = 0;
   *ret = 0;
   while (ep->total < n) {
-    IFDBG(D_NONE, FN; PTREXP(stack); NDBG(con->fd, d); NDBG(n - ep->total, u));
     for (;;) {
       if (con->fd <= 0) TASK_FAIL;
       /*
@@ -1051,13 +984,9 @@ int task_write(connection_descriptor const *con, void *_buf, uint32_t n,
       /* If we get here, we have an error, see if we can retry, and fail if not
        */
       if (!can_retry_write(sock_ret.funerr)) {
-        IFDBG(D_NONE, FN; PTREXP(stack); NDBG(con->fd, d);
-              NDBG(sock_ret.val, d));
         TASK_FAIL;
       }
       wait_io(stack, con->fd, 'w');
-      IFDBG(D_NONE, FN; PTREXP(stack); NDBG(con->fd, d);
-            NDBG(n - ep->total, u));
       TASK_YIELD;
     }
     if (0 == sock_ret.val) { /* We have successfully written n bytes */
@@ -1113,11 +1042,7 @@ int block_fd(int fd) {
   return x;
 }
 
-#ifndef AGGRESSIVE_SWEEP
-/* purecov: begin deadcode */
 int is_only_task() { return link_first(&tasks) == link_last(&tasks); }
-/* purecov: end */
-#endif
 
 static task_env *first_runnable() { return (task_env *)link_first(&tasks); }
 
@@ -1138,6 +1063,7 @@ void set_should_exit_getter(should_exit_getter x) { get_should_exit = x; }
 static double idle_time = 0.0;
 void task_loop() {
   task_env *t = nullptr;
+  int running_task_counter;
   /* While there are tasks */
   for (;;) {
     /* check forced exit callback */
@@ -1145,13 +1071,12 @@ void task_loop() {
       terminate_and_exit();
     }
 
+    running_task_counter = active_tasks;
     t = first_runnable();
     /* While runnable tasks */
     while (runnable_tasks()) {
       task_env *next = next_task(t);
       if (!is_task_head(t)) {
-        /* IFDBG(D_NONE, FN; PTREXP(t); STRLIT(t->name ? t->name : "TASK WITH NO
-         * NAME")); */
         stack = t;
         assert(stack);
         assert(t->terminate != TERMINATED);
@@ -1168,18 +1093,16 @@ void task_loop() {
             task_unref(t);
             stack = nullptr;
           }
+          running_task_counter--;
+          /* break the while loop in order to avoid starvation */
+          if (running_task_counter <= 0) {
+            break;
+          }
         }
       }
       t = next;
     }
     if (active_tasks <= 0) break;
-/* When we get here, there are no runnable tasks left.
-       Wait until something happens.
-    */
-#ifdef DEBUG_TASKS
-    IFDBG(D_NONE, FN; STRLIT("waiting tasks time "); NDBG(seconds(), f);
-          NDBG(iot.nwait, d); NDBG(task_time_q.curn));
-#endif
     {
       double time = seconds();
       if (delayed_tasks()) {
@@ -1190,17 +1113,12 @@ void task_loop() {
             u_int busyloop;
             for (busyloop = 0; busyloop < the_app_xcom_cfg->m_poll_spin_loops;
                  busyloop++) {
-              ADD_WAIT_EV(task_now(), __FILE__, __LINE__, "poll_wait(ms)", 0);
               if (poll_wait(0)) /*Just poll */
                 goto done_wait;
-              ADD_WAIT_EV(task_now(), __FILE__, __LINE__, "poll_wait(ms) end",
-                          0);
               thread_yield();
             }
           }
-          ADD_WAIT_EV(task_now(), __FILE__, __LINE__, "poll_wait(ms)", ms);
           poll_wait(ms); /* Wait at most ms milliseconds and poll for IO */
-          ADD_WAIT_EV(task_now(), __FILE__, __LINE__, "poll_wait(ms) end", ms);
         }
       done_wait:
         /* While tasks with expired timers */
@@ -1209,9 +1127,7 @@ void task_loop() {
           if (delayed_task) activate(delayed_task); /* Make it runnable */
         }
       } else {
-        ADD_T_EV(task_now(), __FILE__, __LINE__, "poll_wait(-1)");
         poll_wait(-1); /* Wait and poll for IO */
-        ADD_T_EV(seconds(), __FILE__, __LINE__, "poll_wait(-1) end");
       }
       idle_time += seconds() - time;
     }
@@ -1221,47 +1137,6 @@ void task_loop() {
 
 #define STAT_INTERVAL 1.0
 
-#if 0
-
-/*
-  This was disabled to prevent unnecessary build warnings.
-
-  TODO:
-  Needs to be assessed whether it should be removed altogether.
- */
-
-static int statistics_task(task_arg arg) {
-  DECL_ENV
-  double next;
-  END_ENV;
-  TASK_BEGIN(void) arg;
-  idle_time = 0.0;
-  send_count = 0;
-  receive_count = 0;
-  send_bytes = 0;
-  receive_bytes = 0;
-  ep->next = seconds() + STAT_INTERVAL;
-  TASK_DELAY_UNTIL(ep->next);
-  for (;;) {
-    G_DEBUG(
-        "task system idle %f send/s %f receive/s %f send b/s %f receive b/s %f",
-        (idle_time / STAT_INTERVAL) * 100.0, send_count / STAT_INTERVAL,
-        receive_count / STAT_INTERVAL, send_bytes / STAT_INTERVAL,
-        receive_bytes / STAT_INTERVAL);
-    idle_time = 0.0;
-    send_count = 0;
-    receive_count = 0;
-    send_bytes = 0;
-    receive_bytes = 0;
-    ep->next += STAT_INTERVAL;
-    TASK_DELAY_UNTIL(ep->next);
-  }
-  FINALLY
-  IFDBG(D_BUG, FN; STRLIT(" shutdown "));
-  TASK_END;
-}
-#endif
-
 static void init_task_vars() {
   stack = nullptr;
   task_errno = 0;
@@ -1269,17 +1144,14 @@ static void init_task_vars() {
 
 void task_sys_init() {
   xcom_init_clock(&task_timer);
-  IFDBG(D_NONE, FN; NDBG(FD_SETSIZE, d));
   init_task_vars();
   link_init(&tasks, TYPE_HASH("task_env"));
   link_init(&free_tasks, TYPE_HASH("task_env"));
   link_init(&ash_nazg_gimbatul, TYPE_HASH("task_env"));
   iotasks_init(&iot);
-  /* task_new(statistics_task, null_arg, "statistics_task", 1); */
 }
 
 static void task_sys_deinit() {
-  IFDBG(D_NONE, FN);
   iotasks_deinit(&iot);
 }
 
@@ -1291,194 +1163,3 @@ void set_task(task_env **p, task_env *t) {
 
 const char *task_name() { return stack ? stack->name : "idle"; }
 
-#ifdef TASK_EVENT_TRACE
-static struct {
-  int n;
-  int front;
-  int rear;
-  task_event q[MAX_TASK_EVENT];
-} task_events;
-
-static inline int addone(int i) { return ((i + 1) % MAX_TASK_EVENT); }
-
-/* Is queue empty?  */
-static inline int event_empty() { return task_events.n <= 0; }
-
-/* Is queue full?  */
-static inline int event_full() { return task_events.n >= MAX_TASK_EVENT; }
-
-/* Insert in queue  */
-static inline void event_insert(task_event s) {
-  if (event_full()) {
-    task_events.front = addone(task_events.front);
-  } else {
-    task_events.n++;
-  }
-  task_events.q[task_events.rear] = s;
-  task_events.rear = addone(task_events.rear);
-}
-
-static const task_event null_event = {{(arg_type)0, {0}}, 0};
-
-/* Extract first from queue  */
-static inline task_event event_extract() {
-  if (!event_empty()) {
-    task_event ret = task_events.q[task_events.front];
-    task_events.front = addone(task_events.front);
-    task_events.n--;
-    return ret;
-  } else {
-    return null_event;
-  }
-}
-
-#ifdef _WIN32
-#define snprintf(...) _snprintf(__VA_ARGS__)
-#endif
-
-/* purecov: begin deadcode */
-void ev_print(task_event te) {
-  enum { bufsize = 10000 };
-  static char buf[bufsize];
-  static size_t pos = 0;
-
-  switch (te.arg.type) {
-    case a_int:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%d", te.arg.val.i);
-      break;
-    case a_long:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%ld", te.arg.val.l);
-      break;
-    case a_uint:
-      if (te.flag & EVENT_DUMP_HEX)
-        pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%x", te.arg.val.u_i);
-      else
-        pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%u", te.arg.val.u_i);
-      break;
-    case a_ulong:
-      if (te.flag & EVENT_DUMP_HEX)
-        pos +=
-            (size_t)snprintf(&buf[pos], bufsize - pos, "%lx", te.arg.val.u_l);
-      else
-        pos +=
-            (size_t)snprintf(&buf[pos], bufsize - pos, "%lu", te.arg.val.u_l);
-      break;
-    case a_ulong_long:
-      if (te.flag & EVENT_DUMP_HEX)
-        pos +=
-            (size_t)snprintf(&buf[pos], bufsize - pos, "%llx", te.arg.val.u_ll);
-      else
-        pos +=
-            (size_t)snprintf(&buf[pos], bufsize - pos, "%llu", te.arg.val.u_ll);
-      break;
-    case a_float:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%f", te.arg.val.f);
-      break;
-    case a_double:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%f", te.arg.val.d);
-      break;
-    case a_void:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%p", te.arg.val.v);
-      break;
-    case a_string:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "%s", te.arg.val.s);
-      break;
-    case a_end:
-      if (pos) G_TRACE("pid %d xcom_id %x %s", xpid(), get_my_xcom_id(), buf);
-      pos = 0;
-      break;
-    default:
-      pos += (size_t)snprintf(&buf[pos], bufsize - pos, "???");
-  }
-  if (te.flag & EVENT_DUMP_PAD && bufsize > pos) {
-    buf[pos++] = ' ';
-  }
-  buf[pos] = 0;
-}
-
-void add_event(int flag, task_arg te) {
-  task_event t;
-  t.arg = te;
-  t.flag = flag;
-  event_insert(t);
-}
-
-#if defined(WIN32)
-static inline int pathsep(char const **x) {
-  int ret = ('\\' == **x);
-  (*x)++;
-  if (ret) {
-    ret = ('\\' == **x);
-    if (ret) {
-      (*x)++;
-    }
-  }
-  return ret;
-}
-#else
-static inline int pathsep(char const **x) {
-  int ret = ('/' == **x);
-  (*x)++;
-  return ret;
-}
-#endif
-
-/* Return last part of path by scanning from beginning */
-static char const *ev_filename(char const *path) {
-  char const *ret = path;
-  char const *p = path;
-  while (*p) {
-    if (pathsep(&p)) ret = p;
-  }
-  return ret;
-}
-
-void add_base_event(double when, char const *file, int state) {
-  static double t = 0.0;
-  char const *fn = ev_filename(file);
-
-  add_event(EVENT_DUMP_PAD, double_arg(when));
-  add_event(EVENT_DUMP_PAD, double_arg(when - t));
-  t = when;
-  add_event(0, string_arg(fn));
-  add_event(0, string_arg(":"));
-  add_event(EVENT_DUMP_PAD, int_arg(state));
-}
-
-void add_task_event(double when, char const *file, int state,
-                    char const *what) {
-  add_base_event(when, file, state);
-  add_event(EVENT_DUMP_PAD, string_arg(what));
-  add_event(EVENT_DUMP_PAD, end_arg());
-}
-
-void add_wait_event(double when, char const *file, int state, char const *what,
-                    int milli) {
-  add_base_event(when, file, state);
-  add_event(EVENT_DUMP_PAD, string_arg(what));
-
-  add_event(EVENT_DUMP_PAD, string_arg("milli"));
-  add_event(EVENT_DUMP_PAD, int_arg(milli));
-  add_event(EVENT_DUMP_PAD, end_arg());
-}
-
-void dump_task_events() {
-  if (!event_empty()) {
-    G_DEBUG(
-        "before dump task_events.front %d task_events.rear %d task_events.n %d",
-        task_events.front, task_events.rear, task_events.n);
-    while (!event_empty()) {
-      ev_print(event_extract());
-    }
-    G_DEBUG(
-        "after dump task_events.front %d task_events.rear %d task_events.n %d",
-        task_events.front, task_events.rear, task_events.n);
-  }
-}
-
-void reset_task_events() {
-  task_events.front = task_events.rear = task_events.n = 0;
-}
-/* purecov: end */
-
-#endif

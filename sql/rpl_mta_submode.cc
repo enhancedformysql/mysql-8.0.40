@@ -447,10 +447,15 @@ longlong Mts_submode_logical_clock::get_lwm_timestamp(Relay_log_info *rli,
     timestamp continuity invariant: if the queue has any item
     its timestamp is greater on one than the estimate.
   */
-  assert(lwm_estim == SEQ_UNINIT || rli->gaq->empty() ||
-         lwm_estim + 1 ==
-             rli->gaq->get_job_group(rli->gaq->entry)->sequence_number);
+  if (lwm_estim == SEQ_UNINIT || rli->gaq->empty() ||
+         (lwm_estim + 1) ==
+             rli->gaq->get_job_group(rli->gaq->entry)->sequence_number) {
+  } else {
+     if (!need_lock) mysql_mutex_unlock(&rli->mts_gaq_LOCK);
+     return last_lwm_timestamp;
+  }
 
+  int valid = 1;
   last_lwm_index = rli->gaq->find_lwm(
       &ptr_g,
       /*
@@ -460,7 +465,12 @@ longlong Mts_submode_logical_clock::get_lwm_timestamp(Relay_log_info *rli,
       lwm_estim == SEQ_UNINIT ||
               (is_stale = clock_leq(last_lwm_timestamp, lwm_estim))
           ? rli->gaq->entry
-          : last_lwm_index);
+          : last_lwm_index, &valid);
+  if (!valid) {
+     if (!need_lock) mysql_mutex_unlock(&rli->mts_gaq_LOCK);
+     return last_lwm_timestamp;
+  }
+
   /*
     if the returned index is sane update the timestamp.
   */
@@ -468,9 +478,17 @@ longlong Mts_submode_logical_clock::get_lwm_timestamp(Relay_log_info *rli,
     // non-decreasing lwm invariant
     assert(clock_leq(last_lwm_timestamp, ptr_g->sequence_number));
 
-    last_lwm_timestamp = ptr_g->sequence_number;
+    if (clock_leq(last_lwm_timestamp, ptr_g->sequence_number)) {
+      if (ptr_g->sequence_number != SEQ_UNINIT) {
+        if (last_lwm_timestamp != ptr_g->sequence_number) {
+          last_lwm_timestamp = ptr_g->sequence_number;
+        }
+      }
+    }
   } else if (is_stale) {
-    last_lwm_timestamp.store(lwm_estim);
+    if (last_lwm_timestamp != lwm_estim) {
+      last_lwm_timestamp.store(lwm_estim);
+    }
   }
 
   if (!need_lock) mysql_mutex_unlock(&rli->mts_gaq_LOCK);
@@ -514,8 +532,6 @@ longlong Mts_submode_logical_clock::get_lwm_timestamp(Relay_log_info *rli,
 */
 bool Mts_submode_logical_clock::wait_for_last_committed_trx(
     Relay_log_info *rli, longlong last_committed_arg) {
-  THD *thd = rli->info_thd;
-
   DBUG_TRACE;
 
   if (last_committed_arg == SEQ_UNINIT) return false;
@@ -531,6 +547,8 @@ bool Mts_submode_logical_clock::wait_for_last_committed_trx(
     When the candidate won't make it the counter is decremented at once
     while the mutex is hold.
   */
+  rli->is_wait_last_commited = false;
+
   if ((!rli->info_thd->killed && !is_error) &&
       !clock_leq(last_committed_arg, get_lwm_timestamp(rli, true))) {
     PSI_stage_info old_stage;
@@ -539,15 +557,11 @@ bool Mts_submode_logical_clock::wait_for_last_committed_trx(
 
     assert(rli->gaq->get_length() >= 2);  // there's someone to wait
 
-    thd->ENTER_COND(&rli->logical_clock_cond, &rli->mts_gaq_LOCK,
-                    &stage_worker_waiting_for_commit_parent, &old_stage);
-    do {
-      mysql_cond_wait(&rli->logical_clock_cond, &rli->mts_gaq_LOCK);
-    } while ((!rli->info_thd->killed && !is_error) &&
-             !clock_leq(last_committed_arg, estimate_lwm_timestamp()));
-    min_waited_timestamp.store(SEQ_UNINIT);  // reset waiting flag
+    rli->is_wait_last_commited = true;
+    rli->last_commmitted_seq = last_committed_arg;
+    min_waited_timestamp.store(SEQ_UNINIT);
     mysql_mutex_unlock(&rli->mts_gaq_LOCK);
-    thd->EXIT_COND(&old_stage);
+
     set_timespec_nsec(&ts[1], 0);
     rli->mts_total_wait_overlap += diff_timespec(&ts[1], &ts[0]);
   } else {
@@ -577,9 +591,13 @@ int Mts_submode_logical_clock::schedule_next_event(Relay_log_info *rli,
   bool gap_successor = false;
 
   DBUG_TRACE;
+
+  rli->sequence_number = sequence_number;
   // We should check if the SQL thread was already killed before we schedule
   // the next transaction
-  if (sql_slave_killed(rli->info_thd, rli)) return 0;
+  if (sql_slave_killed(rli->info_thd, rli)) {
+    return 0;
+  }
 
   Slave_job_group *ptr_group =
       rli->gaq->get_job_group(rli->gaq->assigned_group_index);
@@ -711,7 +729,11 @@ int Mts_submode_logical_clock::schedule_next_event(Relay_log_info *rli,
         Making the slave's max last committed (lwm) to satisfy this
         transaction's scheduling condition.
       */
-      if (gap_successor) last_lwm_timestamp = sequence_number - 1;
+      if (gap_successor) {
+	      if (clock_leq(last_lwm_timestamp, sequence_number)) {
+		      last_lwm_timestamp = sequence_number - 1;
+	      }
+      }
       assert(!clock_leq(sequence_number, estimate_lwm_timestamp()));
     }
 
@@ -909,7 +931,7 @@ Slave_worker *Mts_submode_logical_clock::get_least_occupied_worker(
                 this method clearly can't be considered as optimal.
         */
 #if !defined(_WIN32)
-        sched_yield();
+        my_sleep(500);
 #else
         my_sleep(rli->mts_coordinator_basic_nap);
 #endif
@@ -982,7 +1004,9 @@ int Mts_submode_logical_clock::wait_for_workers_to_finish(
   while (delegated_jobs > jobs_done && !thd->killed && !is_error) {
     // Todo: consider to replace with a. GAQ::get_lwm_timestamp() or
     // b. (better) pthread wait+signal similarly to DB type.
-    if (mta_checkpoint_routine(rli, true)) return -1;
+    if (mta_checkpoint_routine(rli, true)) {
+	    return -1;
+    }
   }
 
   // Check if there is a failure on a not-ignored Worker

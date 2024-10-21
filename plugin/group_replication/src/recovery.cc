@@ -297,27 +297,28 @@ int Recovery_module::recovery_thread_handle() {
 #endif  // NDEBUG
 
   if (error) {
+    LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Tell applier to abandom queue for error:%d", error);
+    applier_module->tell_applier_abandon_queue();
     goto cleanup;
   }
 
 single_member_online:
 
   /* Step 4 */
-  if (!recovery_aborted && !error) {
-    /*
-      Recovery through `group_replication_recovery` is complete,
-      enable the guarantee that the binlog commit order will
-      follow the order instructed by GR.
-    */
-    Commit_stage_manager::enable_manual_session_tickets();
-  }
 
   /**
     If recovery fails or is aborted, it never makes sense to awake the applier,
     as that would lead to the certification and execution of transactions on
     the wrong context.
   */
-  if (!recovery_aborted) applier_module->awake_applier_module();
+  if (!recovery_aborted) {
+    applier_module->awake_applier_module();
+  } else {
+    LogPluginErrMsg(INFORMATION_LEVEL, ER_LOG_PRINTF_MSG,
+                    "Tell applier to abandom queue");
+    applier_module->tell_applier_abandon_queue();
+  }
 
 #ifndef NDEBUG
   DBUG_EXECUTE_IF(
@@ -485,10 +486,7 @@ int Recovery_module::wait_for_applier_module_recovery() {
       detection, once all transactions are checked the member state
       changes to ONLINE.
     */
-    if (RECOVERY_POLICY_WAIT_CERTIFIED == recovery_completion_policy &&
-        pipeline_stats
-                ->get_transactions_waiting_certification_during_recovery() <=
-            0) {
+    if (RECOVERY_POLICY_WAIT_CERTIFIED == recovery_completion_policy) {
       applier_monitoring = false;
     }
 
@@ -564,6 +562,8 @@ int Recovery_module::wait_for_applier_module_recovery() {
   if (applier_module->get_applier_status() == APPLIER_ERROR &&
       !recovery_aborted)
     return 1; /* purecov: inspected */
+
+  pipeline_stats->clear_transactions_waiting_apply();
 
   return 0;
 }

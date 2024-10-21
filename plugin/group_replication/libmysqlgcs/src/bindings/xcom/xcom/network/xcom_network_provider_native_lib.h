@@ -46,18 +46,16 @@ class Xcom_network_provider_library {
   static struct addrinfo *does_node_have_v4_address(struct addrinfo *retrieved);
   static int timed_connect(int fd, struct sockaddr *sock_addr,
                            socklen_t sock_size);
-  static int timed_connect_sec(int fd, struct sockaddr *sock_addr,
-                               socklen_t sock_size, int timeout);
   static int timed_connect_msec(int fd, struct sockaddr *sock_addr,
                                 socklen_t sock_size, int timeout);
   static int allowlist_socket_accept(int fd, site_def const *xcom_config);
   static result gcs_shut_close_socket(int *sock);
   static result announce_tcp(xcom_port port);
+  static result xcom_checked_socket(int domain, int type, int protocol);
 
  private:
   static void init_server_addr(struct sockaddr **sock_addr, socklen_t *sock_len,
                                xcom_port port, int family);
-  static result xcom_checked_socket(int domain, int type, int protocol);
   static result create_server_socket();
   static result create_server_socket_v4();
   static void gcs_shutdown_socket(int *sock);

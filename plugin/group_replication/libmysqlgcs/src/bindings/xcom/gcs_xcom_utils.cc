@@ -123,6 +123,10 @@ uint32_t Gcs_xcom_utils::mhash(const unsigned char *buf, size_t length) {
   return sum;
 }
 
+void Gcs_xcom_utils::update_xcom_cache_mode_for_paxos(int new_mode) {
+  set_max_cache_mode(new_mode);
+}
+
 int Gcs_xcom_utils::init_net() { return ::init_net(); }
 
 int Gcs_xcom_utils::deinit_net() { return ::deinit_net(); }
@@ -493,7 +497,6 @@ bool is_parameters_syntax_correct(
     //  if we have a network namespace configured. If so, we must also check
     //  if the address exists in the network namespace
     configured_protocol = std::stoi(*communication_stack_str);
-    /* purecov: begin deadcode */
     if (!matches_local_ip && netns_manager &&
         configured_protocol > XCOM_PROTOCOL) {
       // Check if we have a namespace configured
@@ -524,7 +527,6 @@ bool is_parameters_syntax_correct(
         netns_manager->restore_original_network_namespace();
       }
     }
-    /* purecov: end */
     if (!matches_local_ip) {
       MYSQL_GCS_LOG_ERROR(
           "There is no local IP address matching the one "
@@ -669,10 +671,8 @@ std::string gcs_protocol_to_mysql_version(Gcs_protocol_version protocol) {
     case Gcs_protocol_version::V2:
       version = "8.0.16";
       break;
-    case Gcs_protocol_version::HIGHEST_KNOWN:
-      version = "8.0.27";
-      break;
     case Gcs_protocol_version::UNKNOWN:
+    case Gcs_protocol_version::V3:
     case Gcs_protocol_version::V4:
     case Gcs_protocol_version::V5:
       /* This should not happen... */

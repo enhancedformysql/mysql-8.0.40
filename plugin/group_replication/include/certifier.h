@@ -144,7 +144,7 @@ class Certifier_broadcast_thread {
     Period (in seconds) between stable transactions set
     broadcast.
   */
-  static const int BROADCAST_GTID_EXECUTED_PERIOD = 60;  // seconds
+  static const int BROADCAST_GTID_EXECUTED_PERIOD = 10;  // seconds
 
  private:
   /**
@@ -186,11 +186,19 @@ class Certifier_interface : public Certifier_stats {
   virtual int stable_set_handle() = 0;
   virtual bool set_group_stable_transactions_set(
       Gtid_set *executed_gtid_set) = 0;
-  virtual void enable_conflict_detection() = 0;
-  virtual void disable_conflict_detection() = 0;
-  virtual bool is_conflict_detection_enable() = 0;
-  virtual ulonglong get_certification_info_size() override = 0;
 };
+
+#define REPLAY_CAL_HASH_ITEM 4088
+#define REPLAY_CAL_HASH_ITEMS (REPLAY_CAL_HASH_ITEM / 8)
+#define REPLAY_CAL_ARRAY 65536
+#define MAX_RELATIVE_SEQUENCE_NUMBER 65535
+
+typedef struct {
+  int number;
+  int size;
+  unsigned char values[REPLAY_CAL_HASH_ITEM];
+} replay_cal_hash_item;
+
 
 class Certifier : public Certifier_interface {
  public:
@@ -318,28 +326,6 @@ class Certifier : public Certifier_interface {
       std::map<std::string, std::string> *cert_info) override;
 
   /**
-    Get the number of postively certified transactions by the certifier
-    */
-  ulonglong get_positive_certified() override;
-
-  /**
-    Get method to retrieve the number of negatively certified transactions.
-    */
-  ulonglong get_negative_certified() override;
-
-  /**
-    Get method to retrieve the certification db size.
-    */
-  ulonglong get_certification_info_size() override;
-
-  /**
-    Get method to retrieve the last conflict free transaction.
-
-    @param[out] value The last conflict free transaction
-    */
-  void get_last_conflict_free_transaction(std::string *value) override;
-
-  /**
     Generate group GTID for a view change log event.
 
     @retval  >0         view change GTID
@@ -355,11 +341,12 @@ class Certifier : public Certifier_interface {
                     group_gtid executed GTID set. The sidno used for this
     transaction will be the group_sidno. The gno here belongs specifically to
     the group UUID.
+    @param[in] local If the gtid value is local or comes from a remote server
 
     @retval  1  error during addition.
     @retval  0  success.
   */
-  int add_group_gtid_to_group_gtid_executed(rpl_gno gno);
+  int add_group_gtid_to_group_gtid_executed(rpl_gno gno, bool local);
 
   /**
     Public method to add the given GTID value in the group_gtid_executed set
@@ -367,11 +354,13 @@ class Certifier : public Certifier_interface {
 
     @param[in] gle  The gtid value that needs to the added in the
                     group_gtid_executed GTID set.
+    @param[in] local If the gtid value is local or comes from a remote server
 
     @retval  1  error during addition.
     @retval  0  success.
   */
-  int add_specified_gtid_to_group_gtid_executed(Gtid_log_event *gle);
+  int add_specified_gtid_to_group_gtid_executed(Gtid_log_event *gle,
+                                                bool local);
 
   /**
     Computes intersection between all sets received, so that we
@@ -384,36 +373,26 @@ class Certifier : public Certifier_interface {
   int stable_set_handle() override;
 
   /**
+    Method to get a string that represents the last local certified GTID
+
+    @param[out] local_gtid_certified_string  The last local GTID transaction
+    string
+
+    @retval 0    if there is no GTID / the string is empty
+    @retval !=0  the size of the string
+  */
+  size_t get_local_certified_gtid(std::string &local_gtid_certified_string);
+
+  /**
     This member function shall add transactions to the stable set
 
     @param executed_gtid_set  The GTID set of the transactions to be added
                               to the stable set.
 
-    @note when set, the stable set will cause the garbage collection
-          process to be invoked
-
     @retval False  if adds successfully,
     @retval True   otherwise.
    */
   bool set_group_stable_transactions_set(Gtid_set *executed_gtid_set) override;
-
-  /**
-    Enables conflict detection.
-  */
-  void enable_conflict_detection() override;
-
-  /**
-    Disables conflict detection.
-  */
-  void disable_conflict_detection() override;
-
-  /**
-    Check if conflict detection is enable.
-
-    @retval True   conflict detection is enable
-    @retval False  otherwise
-  */
-  bool is_conflict_detection_enable() override;
 
  private:
   /**
@@ -478,19 +457,7 @@ class Certifier : public Certifier_interface {
                       is updated to the current sequence number
                       (before update sequence number).
     @param[in] increment_parallel_applier_sequence_number
-                      If false (during certification garbage collection)
-                      parallel_applier_last_committed_global is set to
-                      parallel_applier_last_sequence_number and
-                      parallel_applier_last_sequence_number is not updated
 
-    Note: parallel_applier_last_committed_global should be updated
-          on the following situations:
-          1) Transaction without write set is certified, since it
-             represents the lowest last_committed for all future
-             transactions;
-          2) After certification info garbage collection, since we
-             do not know what write sets were purged, which may cause
-             transactions last committed to be incorrectly computed.
   */
   void update_parallel_applier_indexes(
       bool update_parallel_applier_last_committed_global,
@@ -507,8 +474,10 @@ class Certifier : public Certifier_interface {
 
     @param[in] gno  rpl_gno part of the executing gtid of the ongoing
                     transaction.
+    @param[in] local_transaction if the GTID belongs to a local transaction
   */
-  void add_to_group_gtid_executed_internal(rpl_sidno sidno, rpl_gno gno);
+  void add_to_group_gtid_executed_internal(rpl_sidno sidno, rpl_gno gno,
+                                           bool local_transaction);
 
   /**
     This method is used to get the next valid GNO for the given sidno,
@@ -564,40 +533,24 @@ class Certifier : public Certifier_interface {
 
   bool inline is_initialized() { return initialized; }
 
-  void clear_certification_info();
-
   /**
     Method to clear the members.
   */
   void clear_members();
 
-  /**
-    Last conflict free transaction identification.
-  */
-  Gtid last_conflict_free_transaction;
+  replay_cal_hash_item replayed_cal_array[REPLAY_CAL_ARRAY];
+  int64 base_parallel_applier_sequence_number;
 
-  /**
-    Certification database.
-  */
-  Certification_info certification_info;
-  Sid_map *certification_info_sid_map;
-
-  ulonglong positive_cert;
-  ulonglong negative_cert;
   int64 parallel_applier_last_committed_global;
   int64 parallel_applier_last_sequence_number;
   int64 parallel_applier_sequence_number;
 
 #if !defined(NDEBUG)
-  bool certifier_garbage_collection_block;
   bool same_member_message_discarded;
 #endif
 
   mysql_mutex_t LOCK_certification_info;
 
-  /**
-    Stable set and garbage collector variables.
-  */
   Checkable_rwlock *stable_gtid_set_lock;
   Sid_map *stable_sid_map;
   Gtid_set *stable_gtid_set;
@@ -683,14 +636,6 @@ class Certifier : public Certifier_interface {
   std::map<std::string, Gtid_set::Interval> member_gtids;
   ulonglong gtids_assigned_in_blocks_counter;
 
-  /**
-    Conflict detection is performed when:
-     1) group is on multi-master mode;
-     2) group is on single-primary mode and primary is applying
-        relay logs with transactions from a previous primary.
-  */
-  bool conflict_detection_enable;
-
   mysql_mutex_t LOCK_members;
 
   /**
@@ -698,48 +643,21 @@ class Certifier : public Certifier_interface {
   */
   Certifier_broadcast_thread *broadcast_thread;
 
-  /**
-    Adds an item from transaction writeset to the certification DB.
-    @param[in]  item             item in the writeset to be added to the
-                                 Certification DB.
-    @param[in]  snapshot_version Snapshot version of the incoming transaction
-                                 which modified the above mentioned item.
-    @param[out] item_previous_sequence_number
-                                 The previous parallel applier sequence number
-                                 for this item.
+  bool add_item(const char *item, int64 sequence_number,
+                      int64 *item_previous_sequence_number);
 
-    @retval     False       successfully added to the map.
-                True        otherwise.
+  void clear_replay_cal_info();
+
+
+  /**
+    Last local known GTID
   */
-  bool add_item(const char *item, Gtid_set_ref *snapshot_version,
-                int64 *item_previous_sequence_number);
-
-  /**
-    Find the snapshot_version corresponding to an item. Return if
-    it exists, other wise return NULL;
-
-    @param[in]  item          item for the snapshot version.
-    @retval                   Gtid_set pointer if exists in the map.
-                              Otherwise 0;
-  */
-  Gtid_set *get_certified_write_set_snapshot_version(const char *item);
-
-  /**
-    Removes the intersection of the received transactions stable
-    sets from certification database.
-   */
-  void garbage_collect();
+  Gtid last_local_gtid;
 
   /**
     Clear incoming queue.
   */
   void clear_incoming();
-
-  /*
-    Update method to store the count of the positively and negatively
-    certified transaction on a particular group member.
-  */
-  void update_certified_transaction_count(bool result, bool local_transaction);
 };
 
 /*

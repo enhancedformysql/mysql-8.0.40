@@ -14,14 +14,14 @@ include/start_and_bootstrap_group_replication.inc
 #############################################################
 
 # 1.1. Set READ_ONLY=ON and start group replication, then
-#      READ_ONLY and SUPER_READ_ONLY should be OFF
+#      READ_ONLY and SUPER_READ_ONLY should be ON
 #############################################################
 SET GLOBAL read_only= 1;
 include/start_group_replication.inc
-# The server's super_read_only mode should be 0 here.
-include/assert.inc [The super_read_only mode should be 0 here.]
+# The server's super_read_only mode should be 1 here.
+include/assert.inc [The super_read_only mode should be 1 here.]
 # The server's read_only mode should be 0 here.
-include/assert.inc [The read_only mode should be 0 here.]
+include/assert.inc [The read_only mode should be 1 here.]
 
 # 1.2. Stop group replication and READ_ONLY and
 #      SUPER_READ_ONLY should be ON
@@ -29,14 +29,14 @@ include/assert.inc [The read_only mode should be 0 here.]
 include/stop_group_replication.inc
 
 # 1.3. Set SUPER_READ_ONLY=ON and start group replication,
-#      then READ_ONLY and SUPER_READ_ONLY should be OFF
+#      then READ_ONLY and SUPER_READ_ONLY should be ON
 #############################################################
 SET GLOBAL super_read_only= 1;
 include/start_group_replication.inc
 # The server's super_read_only mode should be 0 here.
-include/assert.inc [The super_read_only mode should be 0 here.]
+include/assert.inc [The super_read_only mode should be 1 here.]
 # The server's read_only mode should be 0 here.
-include/assert.inc [The read_only mode should be 0 here.]
+include/assert.inc [The read_only mode should be 1 here.]
 
 # 1.4. Stop group replication and READ_ONLY and
 #      SUPER_READ_ONLY should be ON

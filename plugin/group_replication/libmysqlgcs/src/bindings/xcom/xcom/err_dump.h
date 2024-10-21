@@ -24,23 +24,5 @@
 #ifndef ERR_DUMP_H
 #define ERR_DUMP_H
 
-#include <string.h>
-
-#include "xcom/result.h"
-#include "xcom/task_debug.h"
-
-static inline void task_dump_err(int err) {
-  if (err) {
-#ifndef XCOM_WITHOUT_OPENSSL
-    if (is_ssl_err(err)) {
-      IFDBG(D_BUG, FN; NDBG(from_ssl_err(err), d));
-    } else {
-#endif
-      IFDBG(D_BUG, FN; NDBG(from_errno(err), d); STREXP(strerror(err)));
-#ifndef XCOM_WITHOUT_OPENSSL
-    }
-#endif
-  }
-}
 
 #endif

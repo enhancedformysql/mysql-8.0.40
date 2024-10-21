@@ -2842,16 +2842,16 @@ class List_process_list : public Do_THD_Impl {
       LEX_CSTRING inspect_sctx_host = inspect_sctx->host();
       LEX_CSTRING inspect_sctx_host_or_ip = inspect_sctx->host_or_ip();
 
-      /*
-        Since we only access a cached value of connection_alive, which is
-        also an atomic, we do not need to lock LOCK_thd_protocol here. We
-        may get a value that is slightly outdated, but we will not get a crash
-        due to reading invalid memory at least.
-      */
-      if (!inspect_thd->is_connected(true) ||
-          (m_user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                      strcmp(inspect_sctx_user.str, m_user)))) {
-        return;
+      {
+        MUTEX_LOCK(grd, &inspect_thd->LOCK_thd_protocol);
+
+        if ((!(inspect_thd->get_protocol() &&
+               inspect_thd->get_protocol()->connection_alive()) &&
+             !inspect_thd->system_thread) ||
+            (m_user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
+                        strcmp(inspect_sctx_user.str, m_user)))) {
+          return;
+        }
       }
 
       thd_info = new (m_client_thd->mem_root) thread_info;
@@ -3090,16 +3090,13 @@ class Fill_process_list : public Do_THD_Impl {
               ? NullS
               : client_priv_user;
 
-      /*
-        Since we only access a cached value of connection_alive, which is
-        also an atomic, we do not need to lock LOCK_thd_protocol here. We
-        may get a value that is slightly outdated, but we will not get a crash
-        due to reading invalid memory at least.
-      */
-      if (!inspect_thd->is_connected(true) ||
-          (user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
-                    strcmp(inspect_sctx_user.str, user)))) {
-        return;
+      {
+        MUTEX_LOCK(grd, &inspect_thd->LOCK_thd_protocol);
+        if ((!inspect_thd->get_protocol()->connection_alive() &&
+             !inspect_thd->system_thread) ||
+            (user && (inspect_thd->system_thread || !inspect_sctx_user.str ||
+                      strcmp(inspect_sctx_user.str, user))))
+          return;
       }
 
       DBUG_EXECUTE_IF(

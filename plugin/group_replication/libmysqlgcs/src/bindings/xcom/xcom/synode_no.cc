@@ -32,7 +32,6 @@
 
 #include "xcom/simset.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_profile.h"
 #include "xcom/xdr_utils.h"
@@ -49,21 +48,17 @@ int synode_lt(synode_no x, synode_no y) {
   return (x.msgno < y.msgno) || (x.msgno == y.msgno && x.node < y.node);
 }
 
+int synode_msgno_not_gt(synode_no x, synode_no y) {
+  assert(x.group_id == 0 || y.group_id == 0 || x.group_id == y.group_id);
+  return x.msgno <= y.msgno;
+}
+
+int synode_msgno_gt(synode_no x, synode_no y) { return x.msgno > y.msgno; }
+
 int synode_gt(synode_no x, synode_no y) {
   assert(x.group_id == 0 || y.group_id == 0 || x.group_id == y.group_id);
   return (x.msgno > y.msgno) || (x.msgno == y.msgno && x.node > y.node);
 }
-
-/* purecov: begin deadcode */
-#ifdef TASK_EVENT_TRACE
-void add_synode_event(synode_no const synode) {
-  add_event(0, string_arg("{"));
-  add_event(EVENT_DUMP_HEX | EVENT_DUMP_PAD, uint_arg(synode.group_id));
-  add_event(EVENT_DUMP_PAD, ulong_long_arg(synode.msgno));
-  add_event(0, ulong_arg(synode.node));
-  add_event(EVENT_DUMP_PAD, string_arg("}"));
-}
-#endif
 
 void synode_array_move(synode_no_array *const to, synode_no_array *const from) {
   if (to->synode_no_array_val != nullptr) free(to->synode_no_array_val);

@@ -59,8 +59,7 @@ bool Primary_election_validation_handler::initialize_validation_structures() {
         group_member_mgr->get_all_members();
     for (Group_member_info *member : *all_members_info) {
       bool is_primary =
-          member->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY &&
-          local_member_info->in_primary_mode();
+          member->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY;
       Election_member_info *election_info = new Election_member_info(
           member->get_uuid(), member->get_member_version(), is_primary);
       group_members_info.insert(
@@ -87,7 +86,7 @@ void Primary_election_validation_handler::terminates_validation_structures() {
 
 Primary_election_validation_handler::enum_primary_validation_result
 Primary_election_validation_handler::validate_primary_uuid(std::string &uuid) {
-  if (local_member_info && local_member_info->in_primary_mode()) {
+  if (local_member_info) {
     // Check the uuid is not the current primary already
     std::string current_primary;
     group_member_mgr->get_primary_member_uuid(current_primary);
@@ -193,7 +192,7 @@ Primary_election_validation_handler::validate_election(std::string &uuid,
     return VALID_PRIMARY;
   }
 
-  if (local_member_info && local_member_info->in_primary_mode()) {
+  if (local_member_info) {
     for (const std::pair<const std::string, Election_member_info *>
              &member_info : group_members_info) {
       if (member_info.second->is_primary() &&

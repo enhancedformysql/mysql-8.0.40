@@ -145,6 +145,10 @@ class Recovery_module {
         reconnect_interval);
   }
 
+  void set_donor_threshold(ulonglong donor_threshold_value) {
+    recovery_state_transfer.set_donor_threshold(donor_threshold_value);
+  }
+
   /**
     Sets all the SSL option to use on recovery.
 

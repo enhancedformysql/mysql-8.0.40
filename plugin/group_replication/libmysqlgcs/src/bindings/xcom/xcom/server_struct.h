@@ -28,6 +28,8 @@
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_limits.h"
 
+#define IP_MAX_SIZE 512
+
 struct srv_buf {
   u_int start;
   u_int n;
@@ -35,22 +37,36 @@ struct srv_buf {
 };
 typedef struct srv_buf srv_buf;
 
+struct server_timewait_info {
+  double last_removed_time;
+  char ip[IP_MAX_SIZE];
+  int timeout;
+  xcom_port port;
+  unsigned int occupied : 1;
+};
+typedef struct server_timewait_info server_timewait_info;
+
 /* Server definition */
 struct server {
   int garbage;
   int refcnt;
-  char *srv;                  /* Server name */
+  int invalid;
+  int number_of_pings_received; /* Number of pings received from this server */
+  int unreachable;
+  unsigned int fast_skip_allowed_for_kill : 1;
   xcom_port port;             /* Port */
+  char *srv;                  /* Server name */
   connection_descriptor *con; /* Descriptor for open connection */
   double active;              /* Last activity */
   double detected;            /* Last incoming */
+  double conn_rtt;
+  double large_transfer_detected; /* Process large transfer */
+  double last_ping_received;      /* Last received ping timestamp */
   channel outgoing;           /* Outbound messages */
   task_env *sender;           /* The sender task */
   task_env *reply_handler;    /* The reply task */
   srv_buf out_buf;
-  int invalid;
-  int number_of_pings_received; /* Number of pings received from this server */
-  double last_ping_received;    /* Last received ping timestamp */
+
 #if defined(_WIN32)
   bool reconnect; /*States if the server should be reconnected*/
 #endif

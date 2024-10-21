@@ -24,10 +24,7 @@
 #ifndef XCOM_TRANSPORT_H
 #define XCOM_TRANSPORT_H
 
-#include "xcom/server_struct.h"
-#include "xcom/site_struct.h"
 #include "xcom/xcom_common.h"
-#include "xdr_gen/xcom_vp.h"
 
 #define XDR_INT_SIZE 4
 #define MSG_HDR_SIZE (3 * XDR_INT_SIZE)
@@ -58,9 +55,6 @@
 #define X_TYPE (2 * XDR_INT_SIZE)
 #define X_TAG (X_TYPE + 1)
 #define X_TAG_PTR(buf) &((buf)[X_TAG])
-#ifdef NOTDEF
-#define CHECK_PTR(buf) &((buf)[3 * XDR_INT_SIZE])
-#endif
 #define MSG_PTR(buf) &((buf)[MSG_HDR_SIZE])
 
 extern xcom_proto const my_min_xcom_version; /* The minimum protocol version I
@@ -75,15 +69,6 @@ enum x_msg_type {
   x_version_reply = 2 /* Protocol version reply */
 };
 typedef enum x_msg_type x_msg_type;
-
-struct envelope {
-  char *srv;
-  xcom_port port;
-  pax_msg *p;
-  int crash_on_error;
-};
-
-typedef struct envelope envelope;
 
 int check_protoversion(xcom_proto x_proto, xcom_proto negotiated);
 int flush_srv_buf(server *s, int64_t *ret);
@@ -102,7 +87,7 @@ int flush_srv_buf(server *s, int64_t *ret);
 */
 
 int buffered_read_msg(connection_descriptor *rfd, srv_buf *buf, pax_msg *p,
-                      server *s, int64_t *ret);
+                      int64_t *ret);
 
 /**
   Reads message from connection rfd without buffering reads.
@@ -124,6 +109,8 @@ int send_to_others(site_def const *s, pax_msg *p, const char *dbg);
 int send_to_someone(site_def const *s, pax_msg *p, const char *dbg);
 int send_to_self_site(site_def const *s, pax_msg *p);
 int send_to_all_except_self(site_def const *s, pax_msg *p, const char *dbg);
+int send_to_filtered_others(site_def const *s, pax_msg *p,
+                            node_no filtered_node, const char *dbg);
 
 void wakeup_sender();
 int sender_task(task_arg arg);
@@ -134,18 +121,17 @@ int srv_unref(server *s);
 int tcp_reaper_task(task_arg arg);
 int tcp_reconnection_task(task_arg arg);
 int incoming_connection_task(task_arg arg);
-uint32_t crc32c_hash(char *buf, char *end);
 int apply_xdr(void *buff, uint32_t bufflen, xdrproc_t xdrfunc, void *xdrdata,
               enum xdr_op op) SUPPRESS_UBSAN;
 void init_crc32c();
 void init_xcom_transport(xcom_port listen_port);
 void reset_srv_buf(srv_buf *sb);
-char *xcom_get_name(char *a);
 xcom_port xcom_get_port(char *a);
 int send_server_msg(site_def const *s, node_no i, pax_msg *p);
 double server_active(site_def const *s, node_no i);
 void update_servers(site_def *s, cargo_type operation);
 void garbage_collect_servers();
+bool check_tcp_connection_valid(int fd, int *same_ip);
 int send_msg(server *s, node_no from, node_no to, uint32_t group_id,
              pax_msg *p);
 /**
@@ -193,7 +179,6 @@ xcom_proto read_protoversion(unsigned char *p);
 int serialize_msg(pax_msg *p, xcom_proto x_proto, uint32_t *buflen, char **buf);
 int deserialize_msg(pax_msg *p, xcom_proto x_proto, char *buf, uint32_t buflen);
 xcom_proto common_xcom_version(site_def const *site);
-xcom_proto get_latest_common_proto();
 xcom_proto set_latest_common_proto(xcom_proto x_proto);
 extern linkage connect_wait;
 extern int connect_tcp(char *server, xcom_port port, int *ret);
@@ -205,8 +190,6 @@ extern int connect_tcp(char *server, xcom_port port, int *ret);
  */
 xcom_proto minimum_ipv6_version();
 
-#define IP_MAX_SIZE 512
-
 /**
  * @brief Get the ip and port object from a given address in the authorized
  * input format. For IP v4 is IP (or) NAME:PORT and for IPv6 is [IP (or)
@@ -217,7 +200,7 @@ xcom_proto minimum_ipv6_version();
  * @param port the resulting port
  * @return int true (1) in case of parse error
  */
-int get_ip_and_port(char const *address, char ip[IP_MAX_SIZE], xcom_port *port);
+int get_ip_and_port(char *address, char ip[IP_MAX_SIZE], xcom_port *port);
 
 /**
  * @brief Checks if an incoming node is eligible to enter the group
@@ -239,7 +222,7 @@ int is_new_node_eligible_for_ipv6(xcom_proto incoming_proto,
                                   const site_def *current_site_def);
 
 #define INITIAL_CONNECT_WAIT 0.1
-#define MAX_CONNECT_WAIT 10.0
-#define CONNECT_WAIT_INCREASE 1.0
+#define MAX_CONNECT_WAIT 1.0
+#define CONNECT_WAIT_INCREASE 1.1
 
 #endif

@@ -44,34 +44,14 @@ SET GTID_NEXT= AUTOMATIC;
 Pattern found.
 Pattern found.
 
-# Create a table tc3 with foreign key with delete CASCADE clause
-# on server2(master) and add data to it.
-[connection server2]
-CREATE TABLE tp3 (c1 INT PRIMARY KEY);
-CREATE TABLE tc3 (c1 INT PRIMARY KEY, FOREIGN KEY (c1) REFERENCES tp3(c1) ON DELETE CASCADE);
-INSERT INTO tp3 VALUES(1);
-include/rpl_sync.inc
-SET GTID_NEXT= 'aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb:3';
-INSERT INTO tc3 VALUES (1);
-SET GTID_NEXT= AUTOMATIC;
-
-# Verify insert doesn't gets executed as table
-# has a foreign key with CASCADE clause.
-[connection server1]
-Pattern found.
-
 # Clean-up
 [connection server2]
 drop table t1;
 drop table t2;
-drop table tc3;
-drop table tp3;
 SET SESSION BINLOG_FORMAT= DEFAULT;
 Warnings:
 Warning	1287	'@@binlog_format' is deprecated and will be removed in a future release.
 [connection server1]
 drop table t1;
 drop table t2;
-drop table tc3;
-drop table tp3;
 include/group_replication_end.inc

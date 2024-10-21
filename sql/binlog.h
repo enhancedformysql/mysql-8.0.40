@@ -169,8 +169,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
   PSI_mutex_key m_key_LOCK_flush_queue;
   /** The PFS instrumentation key for @ LOCK_sync_queue. */
   PSI_mutex_key m_key_LOCK_sync_queue;
-  /** The PFS instrumentation key for @ LOCK_wait_for_group_turn. */
-  PSI_mutex_key m_key_LOCK_wait_for_group_turn;
   /** The PFS instrumentation key for @ COND_done. */
   PSI_mutex_key m_key_COND_done;
   /** The PFS instrumentation key for @ COND_flush_queue. */
@@ -189,8 +187,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
   PSI_cond_key m_key_update_cond;
   /** The instrumentation key to use for @ prep_xids_cond. */
   PSI_cond_key m_key_prep_xids_cond;
-  /** The PFS instrumentation key for @ COND_wait_for_group_turn. */
-  PSI_cond_key m_key_COND_wait_for_group_turn;
   /** The instrumentation key to use for opening the log file. */
   PSI_file_key m_key_file_log;
   /** The instrumentation key to use for opening the log index file. */
@@ -368,11 +364,9 @@ class MYSQL_BIN_LOG : public TC_LOG {
       PSI_mutex_key key_LOCK_flush_queue, PSI_mutex_key key_LOCK_log,
       PSI_mutex_key key_LOCK_binlog_end_pos, PSI_mutex_key key_LOCK_sync,
       PSI_mutex_key key_LOCK_sync_queue, PSI_mutex_key key_LOCK_xids,
-      PSI_mutex_key key_LOCK_log_info,
-      PSI_mutex_key key_LOCK_wait_for_group_turn, PSI_cond_key key_COND_done,
+      PSI_mutex_key key_LOCK_log_info, PSI_cond_key key_COND_done,
       PSI_cond_key key_COND_flush_queue, PSI_cond_key key_update_cond,
-      PSI_cond_key key_prep_xids_cond,
-      PSI_cond_key key_COND_wait_for_group_turn, PSI_file_key key_file_log,
+      PSI_cond_key key_prep_xids_cond, PSI_file_key key_file_log,
       PSI_file_key key_file_log_index, PSI_file_key key_file_log_cache,
       PSI_file_key key_file_log_index_cache) {
     m_key_COND_done = key_COND_done;
@@ -398,9 +392,6 @@ class MYSQL_BIN_LOG : public TC_LOG {
     m_key_file_log_index = key_file_log_index;
     m_key_file_log_cache = key_file_log_cache;
     m_key_file_log_index_cache = key_file_log_index_cache;
-
-    m_key_LOCK_wait_for_group_turn = key_LOCK_wait_for_group_turn;
-    m_key_COND_wait_for_group_turn = key_COND_wait_for_group_turn;
   }
 
  public:

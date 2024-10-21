@@ -93,6 +93,11 @@ class Master_info : public Rpl_info {
   */
   char host[HOSTNAME_LENGTH + 1];
 
+  unsigned int io_buffered : 1;
+  unsigned int io_buffered_cnt : 10;
+  size_t total_events;
+  size_t total_buffered_events;
+
   /*
     Check if the channel is configured.
 

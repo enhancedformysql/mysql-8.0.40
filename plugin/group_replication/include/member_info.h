@@ -147,14 +147,14 @@ class Group_member_info : public Plugin_gcs_message {
     // Length of the payload item: variable
     PIT_VIEW_CHANGE_UUID = 21,
 
-    // Length of the paylod item: 1 byte
-    PIT_ALLOW_SINGLE_LEADER = 22,
+    // Length of the paylod item: variable
+    PIT_GROUP_ACTION_RUNNING_NAME = 22,
 
     // Length of the paylod item: variable
-    PIT_GROUP_ACTION_RUNNING_NAME = 23,
+    PIT_GROUP_ACTION_RUNNING_DESCRIPTION = 23,
 
-    // Length of the paylod item: variable
-    PIT_GROUP_ACTION_RUNNING_DESCRIPTION = 24,
+    // Length of the member gtid item: 1 bytes
+    PIT_MEMBER_GTID_MODE = 24,
 
     // No valid type codes can appear after this one.
     PIT_MAX = 25
@@ -268,8 +268,6 @@ class Group_member_info : public Plugin_gcs_message {
     block size
     @param[in] role_arg                               member role within the
     group
-    @param[in] in_single_primary_mode                 is member in single mode
-    @param[in] has_enforces_update_everywhere_checks  has member enforce update
     check
     @param[in] member_weight_arg                      member_weight
     @param[in] lower_case_table_names_arg             lower case table names
@@ -277,8 +275,6 @@ class Group_member_info : public Plugin_gcs_message {
     @param[in] recovery_endpoints_arg                 recovery endpoints
     @param[in] view_change_uuid_arg                   view change uuid
     advertised
-    @param[in] allow_single_leader                    flag indicating whether or
-    not to use single-leader behavior
     @param[in] psi_mutex_key_arg                      mutex key
    */
   Group_member_info(const char *hostname_arg, uint port_arg,
@@ -288,12 +284,9 @@ class Group_member_info : public Plugin_gcs_message {
                     Member_version &member_version_arg,
                     ulonglong gtid_assignment_block_size_arg,
                     Group_member_info::Group_member_role role_arg,
-                    bool in_single_primary_mode,
-                    bool has_enforces_update_everywhere_checks,
                     uint member_weight_arg, uint lower_case_table_names_arg,
-                    bool default_table_encryption_arg,
-                    const char *recovery_endpoints_arg,
-                    const char *view_change_uuid_arg, bool allow_single_leader,
+                    bool default_table_encryption_arg, const char *recovery_endpoints_arg,
+                    const char *view_change_uuid_arg, int single_primary_election_mode_arg,
                     PSI_mutex_key psi_mutex_key_arg =
                         key_GR_LOCK_group_member_info_update_lock);
 
@@ -336,8 +329,6 @@ class Group_member_info : public Plugin_gcs_message {
     block size
     @param[in] role_arg                               member role within the
     group
-    @param[in] in_single_primary_mode                 is member in single mode
-    @param[in] has_enforces_update_everywhere_checks  has member enforce update
     check
     @param[in] member_weight_arg                      member_weight
     @param[in] lower_case_table_names_arg             lower case table names
@@ -345,8 +336,6 @@ class Group_member_info : public Plugin_gcs_message {
     @param[in] recovery_endpoints_arg                 recovery endpoints
     advertised
     @param[in] view_change_uuid_arg                   view change uuid
-    @param[in] allow_single_leader                    flag indicating whether or
-    not to use single-leader behavior
    */
   void update(const char *hostname_arg, uint port_arg, const char *uuid_arg,
               int write_set_extraction_algorithm,
@@ -355,12 +344,9 @@ class Group_member_info : public Plugin_gcs_message {
               Member_version &member_version_arg,
               ulonglong gtid_assignment_block_size_arg,
               Group_member_info::Group_member_role role_arg,
-              bool in_single_primary_mode,
-              bool has_enforces_update_everywhere_checks,
               uint member_weight_arg, uint lower_case_table_names_arg,
-              bool default_table_encryption_arg,
-              const char *recovery_endpoints_arg,
-              const char *view_change_uuid_arg, bool allow_single_leader);
+              bool default_table_encryption_arg, const char *recovery_endpoints_arg,
+              const char *view_change_uuid_arg, int single_primary_election_mode_arg);
 
   /**
     Update Group_member_info.
@@ -440,20 +426,6 @@ class Group_member_info : public Plugin_gcs_message {
   uint32 get_configuration_flags();
 
   /**
-    Set the primary flag
-    @param in_primary_mode is the member in primary mode
-  */
-  void set_primary_mode_flag(bool in_primary_mode);
-
-  /**
-    Set the enforces_update_everywhere_checks flag
-    @param enforce_everywhere_checks are the update everywhere checks active or
-    not
-  */
-  void set_enforces_update_everywhere_checks_flag(
-      bool enforce_everywhere_checks);
-
-  /**
     @return the global-variable lower case table names value
   */
   uint get_lower_case_table_names();
@@ -462,18 +434,6 @@ class Group_member_info : public Plugin_gcs_message {
     @return the global-variable lower case table names value
   */
   bool get_default_table_encryption();
-
-  /**
-    @return the member state of system variable
-            group_replication_single_primary_mode
-  */
-  bool in_primary_mode();
-
-  /**
-    @return the member state of system variable
-            group_replication_enforce_update_everywhere_checks
-  */
-  bool has_enforces_update_everywhere_checks();
 
   /**
     Updates this object recovery status
@@ -536,6 +496,12 @@ class Group_member_info : public Plugin_gcs_message {
   static bool comparator_group_member_weight(Group_member_info *m1,
                                              Group_member_info *m2);
 
+  static bool comparator_group_member_executed_gtid_first(
+      Group_member_info *m1, Group_member_info *m2);
+
+  static bool comparator_group_member_weight_first(Group_member_info *m1,
+                                                   Group_member_info *m2);
+
   /**
     Return true if member version is higher than other member version
    */
@@ -550,6 +516,16 @@ class Group_member_info : public Plugin_gcs_message {
     Return true if member weight is higher than other member weight
    */
   bool has_greater_weight(Group_member_info *other);
+  /**
+    Return true if member gtid is higher than other member gtid
+   */
+  bool has_greater_executed_gtid(Group_member_info *other);
+
+  bool has_greater_weight_and_executed_gtid(Group_member_info *other);
+
+  int compare_gtid(Group_member_info *other);
+
+  int compare_weight(Group_member_info *other);
 
   /**
     Redefinition of operate ==, which operate upon the uuid
@@ -572,26 +548,13 @@ class Group_member_info : public Plugin_gcs_message {
   bool is_unreachable();
 
   /**
-    Update this member conflict detection to true
-   */
-  void enable_conflict_detection();
-
-  /**
-    Update this member conflict detection to false
-   */
-  void disable_conflict_detection();
-
-  /**
-    Return true if conflict detection is enable on this member
-   */
-  bool is_conflict_detection_enabled();
-
-  /**
     Update member weight
 
     @param[in] new_member_weight  new member_weight to set
    */
   void set_member_weight(uint new_member_weight);
+
+  int in_single_primary_election_mode();
 
   /**
     Return member weight
@@ -637,8 +600,6 @@ class Group_member_info : public Plugin_gcs_message {
     @return view change uuid or "AUTOMATIC"
    */
   std::string get_view_change_uuid();
-
-  bool get_allow_single_leader();
 
   /**
     Get group action name if running on the member.
@@ -711,7 +672,6 @@ class Group_member_info : public Plugin_gcs_message {
   bool unreachable;
   Group_member_role role;
   uint32 configuration_flags;
-  bool conflict_detection_enable;
   uint member_weight;
   uint lower_case_table_names;
   bool default_table_encryption;
@@ -719,14 +679,9 @@ class Group_member_info : public Plugin_gcs_message {
   bool primary_election_running;
   std::string recovery_endpoints;
   std::string m_view_change_uuid;
-  bool m_allow_single_leader;
   std::string m_group_action_running_name;
   std::string m_group_action_running_description;
-#ifndef NDEBUG
- public:
-  bool skip_encode_default_table_encryption;
-  bool m_skip_encode_view_change_uuid;
-#endif
+  int single_primary_election_mode;
   // Allow use copy constructor on unit tests.
   PSI_mutex_key psi_mutex_key;
 };
@@ -897,7 +852,7 @@ class Group_member_info_manager_interface {
 
     @param[in] uuid        member uuid
    */
-  virtual void set_member_unreachable(const std::string &uuid) = 0;
+  virtual bool set_member_unreachable(const std::string &uuid) = 0;
 
   /**
     Sets the identified member as reachable.
@@ -950,19 +905,6 @@ class Group_member_info_manager_interface {
                                     uint member_weight) = 0;
 
   /**
-    Changes the primary flag on all members
-    @param in_primary_mode is the member in primary mode
-  */
-  virtual void update_primary_member_flag(bool in_primary_mode) = 0;
-
-  /**
-    Set the enforces_update_everywhere_checks flag on all members
-    @param enforce_everywhere are the update everywhere checks active or not
-  */
-  virtual void update_enforce_everywhere_checks_flag(
-      bool enforce_everywhere) = 0;
-
-  /**
     Encodes this object to send via the network
 
     @param[out] to_encode out parameter to receive the encoded data
@@ -978,13 +920,6 @@ class Group_member_info_manager_interface {
    */
   virtual Group_member_info_list *decode(const uchar *to_decode,
                                          size_t length) = 0;
-
-  /**
-    Check if some member of the group has the conflict detection enable
-
-    @return true if at least one member has  conflict detection enabled
-  */
-  virtual bool is_conflict_detection_enabled() = 0;
 
   /**
     Return the uuid for the for the primary
@@ -1165,7 +1100,7 @@ class Group_member_info_manager : public Group_member_info_manager_interface {
                             Group_member_info::Group_member_status new_status,
                             Notification_context &ctx) override;
 
-  void set_member_unreachable(const std::string &uuid) override;
+  bool set_member_unreachable(const std::string &uuid) override;
 
   void set_member_reachable(const std::string &uuid) override;
 
@@ -1183,16 +1118,10 @@ class Group_member_info_manager : public Group_member_info_manager_interface {
   void update_member_weight(const std::string &uuid,
                             uint member_weight) override;
 
-  void update_primary_member_flag(bool in_primary_mode) override;
-
-  void update_enforce_everywhere_checks_flag(bool enforce_everywhere) override;
-
   void encode(std::vector<uchar> *to_encode) override;
 
   Group_member_info_list *decode(const uchar *to_decode,
                                  size_t length) override;
-
-  bool is_conflict_detection_enabled() override;
 
   bool get_primary_member_uuid(std::string &primary_member_uuid) override;
 

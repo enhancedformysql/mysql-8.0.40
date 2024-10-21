@@ -170,6 +170,55 @@ long Sql_service_command_interface::kill_session(unsigned long session_id) {
   return error;
 }
 
+long Sql_service_command_interface::wait_for_server_gtid_executed(
+    std::string &gtid_executed, int timeout) {
+  DBUG_TRACE;
+  long error = 0;
+
+  /* No support for this method on thread isolation mode */
+  assert(connection_thread_isolation != PSESSION_DEDICATED_THREAD);
+
+  if (connection_thread_isolation != PSESSION_DEDICATED_THREAD) {
+    error = sql_service_commands.internal_wait_for_server_gtid_executed(
+        m_server_interface, gtid_executed, timeout);
+  }
+
+  return error;
+}
+
+long Sql_service_commands::internal_wait_for_server_gtid_executed(
+    Sql_service_interface *sql_interface, std::string &gtid_executed,
+    int timeout) {
+  DBUG_TRACE;
+
+  assert(sql_interface != nullptr);
+
+  DBUG_EXECUTE_IF("sql_int_wait_for_gtid_executed_no_timeout",
+                  { timeout = 0; });
+
+  std::stringstream ss;
+  ss << "SELECT WAIT_FOR_EXECUTED_GTID_SET('" << gtid_executed << "'";
+  if (timeout > 0) {
+    ss << ", " << timeout << ")";
+  } else {
+    ss << ")";
+  }
+
+  std::string query = ss.str();
+  Sql_resultset rset;
+  long srv_err = sql_interface->execute_query(query, &rset);
+  if (srv_err) {
+    /* purecov: begin inspected */
+    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_INTERNAL_QUERY, query.c_str(),
+                 srv_err);
+    return 1;
+    /* purecov: end */
+  } else if (rset.get_rows() > 0) {
+    if (rset.getLong(0) == 1) return -1;
+  }
+  return 0;
+}
+
 long Sql_service_command_interface::clone_server(
     std::string &host, std::string &port, std::string &user, std::string &pass,
     bool use_ssl, std::string &error_msg) {
@@ -464,8 +513,11 @@ int Session_plugin_thread::launch_session_thread(void *plugin_pointer_var,
   if ((mysql_thread_create(key_GR_THD_plugin_session, &m_plugin_session_pthd,
                            get_connection_attrib(), launch_handler_thread,
                            (void *)this))) {
-    mysql_mutex_unlock(&m_run_lock); /* purecov: inspected */
-    return 1;                        /* purecov: inspected */
+    mysql_mutex_unlock(&m_run_lock);
+    LogPluginErrMsg(WARNING_LEVEL, ER_LOG_PRINTF_MSG,
+        "Increase the number of threads that could be "
+        "created(nproc for Linux) and restart MySQL.");
+    return 1;
   }
   m_session_thread_state.set_created();
 

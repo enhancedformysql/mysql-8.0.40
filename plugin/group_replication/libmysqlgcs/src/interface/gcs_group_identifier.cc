@@ -30,7 +30,6 @@ const std::string &Gcs_group_identifier::get_group_id() const {
   return group_id;
 }
 
-/* purecov: begin deadcode */
 bool Gcs_group_identifier::operator<(const Gcs_group_identifier &other) const {
   return group_id.compare(other.group_id) < 0;
 }
@@ -38,4 +37,3 @@ bool Gcs_group_identifier::operator<(const Gcs_group_identifier &other) const {
 bool Gcs_group_identifier::operator==(const Gcs_group_identifier &other) const {
   return group_id.compare(other.group_id) == 0;
 }
-/* purecov: end */

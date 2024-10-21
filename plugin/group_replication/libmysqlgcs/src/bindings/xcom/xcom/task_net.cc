@@ -45,10 +45,8 @@
 
 #include "xcom/simset.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/task_os.h"
 #include "xcom/x_platform.h"
-#include "xcom/xcom_memory.h"
 #include "xdr_gen/xcom_vp.h"
 
 #define STRING_PORT_SIZE 6
@@ -90,16 +88,6 @@ int checked_getaddrinfo(const char *nodename, const char *servname,
   /* FreeBSD has removed the definition of EAI_NODATA altogether. */
   if (errval && errval != EAI_NONAME && errval != EAI_AGAIN) {
 #endif
-#if !defined(_WIN32)
-    IFDBG(
-        D_NONE, NUMEXP(errval); STREXP(gai_strerror(errval));
-        if (errval == EAI_SYSTEM) {
-          NUMEXP(errno);
-          STREXP(g_strerror(errno));
-        });
-#else
-    IFDBG(D_NONE, NUMEXP(errval); STREXP(gai_strerror(errval)));
-#endif
   }
   assert((errval == 0 && *res) || (errval != 0 && *res == nullptr));
   return errval;
@@ -127,7 +115,6 @@ struct infonode {
   infonode *right;
 };
 
-#ifdef XCOM_STANDALONE
 static infonode *addrinfomap;
 
 static infonode *insert_server(infonode **top, char const *server,
@@ -136,7 +123,7 @@ static infonode *insert_server(infonode **top, char const *server,
     return 0;
   else {
     if (*top == 0) { /* Insert here */
-      infonode *n = (infonode *)xcom_calloc((size_t)1, sizeof(infonode));
+      infonode *n = (infonode *)calloc((size_t)1, sizeof(infonode));
       n->server = strdup(server);
       n->addr = addr;
       *top = n;
@@ -193,17 +180,12 @@ void free_getaddrinfo_cache(infonode *top) {
     if (left) free_getaddrinfo_cache(left);
   }
 }
-#endif
 
 void deinit_network_cache() {
-#ifdef XCOM_STANDALONE
   if (addrinfomap) {
-    /* purecov: begin deadcode */
     free_getaddrinfo_cache(addrinfomap);
     addrinfomap = NULL;
-    /* purecov: end */
   }
-#endif
 }
 
 #ifdef _WIN32

@@ -183,7 +183,7 @@ class Mts_submode_logical_clock : public Mts_submode {
   void withdraw_delegated_job() { delegated_jobs--; }
   int wait_for_workers_to_finish(Relay_log_info *rli,
                                  Slave_worker *ignore = nullptr) override;
-  bool wait_for_last_committed_trx(Relay_log_info *rli,
+  bool wait_for_last_committed_trx(Relay_log_info *rli, 
                                    longlong last_committed_arg);
   /*
     LEQ comparison of two logical timestamps follows regular rules for

@@ -32,8 +32,6 @@
 #include "my_inttypes.h"  // IWYU pragma: keep
 
 #include "libbinlogevents/include/compression/factory.h"
-#include "sql/binlog/group_commit/bgc_ticket.h"
-#include "sql/memory/aligned_atomic.h"
 #include "sql/resource_blocker.h"  // resource_blocker::User
 #include "sql/system_variables.h"
 
@@ -295,117 +293,36 @@ class Transaction_compression_ctx {
   Compressor_ptr_t m_compressor;
 };
 
-/**
-  Keeps the THD session context to be used with the
-  `Bgc_ticket_manager`. In particular, manages the value of the ticket the
-  current THD session has been assigned to.
- */
 class Binlog_group_commit_ctx {
- public:
-  Binlog_group_commit_ctx() = default;
-  virtual ~Binlog_group_commit_ctx() = default;
+  public:
+    Binlog_group_commit_ctx() = default;
+    virtual ~Binlog_group_commit_ctx() = default;
+  public:
+    /// Set whether binlog max size was exceeded.
+    /// The max size exceeded condition must be checked with LOCK_log held and
+    /// thus its done early during flush stage although not used until end of BGC.
+    /// This is an optimization which avoids taking LOCK_log at end of BGC when no
+    /// session has seen that the threshold has been exceeded.
+    void set_max_size_exceeded(bool value) { m_max_size_exceeded = value; }
 
-  /**
-    Retrieves the ticket that the THD session has been assigned to. If
-    it hasn't been assigned to any yet, returns '0'.
+    /// Turn on forced rotate at end of BGC. Thus performing a rotate although
+    /// the max size has not been reached.
+    void set_force_rotate() { m_force_rotate = true; }
 
-    @return The ticket the THD session has been assigned to, if
-            any. Returns `0` if it hasn't.
-   */
-  binlog::BgcTicket get_session_ticket();
-  /**
-    Sets the THD session's ticket to the given value.
+    /// Aggregate the rotate requests over all sessions in queue
+    ///
+    /// @return The first element states whether any session
+    /// detected max binlog size exceeded and the second whether any session
+    /// requested forced binlog rotate.
+    static std::pair<bool, bool> aggregate_rotate_settings(THD *queue);
+    
+    void reset();
 
-    @param ticket The ticket to set the THD session to.
-   */
-  void set_session_ticket(binlog::BgcTicket ticket);
-  /**
-    Assigns the THD session to the ticket accepting assignments in the
-    ticket manager. The method is idem-potent within the execution of a
-    statement. This means that it can be invoked several times during the
-    execution of a command within the THD session that only once will the
-    session be assign to a ticket.
-   */
-  void assign_ticket();
-  /**
-    Whether or not the session already waited on the ticket.
-
-    @return true if the session already waited, false otherwise.
-   */
-  bool has_waited();
-  /**
-    Marks the underlying session has already waited on the ticket.
-   */
-  void mark_as_already_waited();
-  /**
-    Resets the THD session's ticket context.
-   */
-  void reset();
-  /**
-    Returns the textual representation of this object;
-
-    @return a string containing the textual representation of this object.
-   */
-  std::string to_string() const;
-  /**
-    Dumps the textual representation of this object into the given output
-    stream.
-
-    @param out The stream to dump this object into.
-   */
-  void format(std::ostream &out) const;
-  /**
-    Dumps the textual representation of an instance of this class into the
-    given output stream.
-
-    @param out The output stream to dump the instance to.
-    @param to_dump The class instance to dump to the output stream.
-
-    @return The output stream to which the instance was dumped to.
-   */
-  inline friend std::ostream &operator<<(
-      std::ostream &out, Binlog_group_commit_ctx const &to_dump) {
-    to_dump.format(out);
-    return out;
-  }
-  /**
-    Retrieves the flag for determining if it should be possible to manually
-    set the session's ticket.
-
-    @return the reference for the atomic flag.
-   */
-  static memory::Aligned_atomic<bool> &manual_ticket_setting();
-
- private:
-  /** The ticket the THD session has been assigned to. */
-  binlog::BgcTicket m_session_ticket{0};
-  /** Whether or not the session already waited on the ticket. */
-  bool m_has_waited{false};
-
- public:
-  /// Set whether binlog max size was exceeded.
-  /// The max size exceeded condition must be checked with LOCK_log held and
-  /// thus its done early during flush stage although not used until end of BGC.
-  /// This is an optimization which avoids taking LOCK_log at end of BGC when no
-  /// session has seen that the threshold has been exceeded.
-  void set_max_size_exceeded(bool value) { m_max_size_exceeded = value; }
-
-  /// Turn on forced rotate at end of BGC. Thus performing a rotate although
-  /// the max size has not been reached.
-  void set_force_rotate() { m_force_rotate = true; }
-
-  /// Aggregate the rotate requests over all sessions in queue
-  ///
-  /// @return The first element states whether any session
-  /// detected max binlog size exceeded and the second whether any session
-  /// requested forced binlog rotate.
-  static std::pair<bool, bool> aggregate_rotate_settings(THD *queue);
-
- private:
-  /// Whether session detected that binlog max size was exceeded.
-  bool m_max_size_exceeded{false};
-  /// Whether session requests forced rotate
-  bool m_force_rotate{false};
+  private:
+    /// Whether session detected that binlog max size was exceeded.
+    bool m_max_size_exceeded{false};
+    /// Whether session requests forced rotate
+    bool m_force_rotate{false};
 };
 
 /*
@@ -443,7 +360,6 @@ class Rpl_thd_context {
   Dependency_tracker_ctx m_dependency_tracker_ctx;
   Last_used_gtid_tracker_ctx m_last_used_gtid_tracker_ctx;
   Transaction_compression_ctx m_transaction_compression_ctx;
-  /** Manages interaction and keeps context w.r.t `Bgc_ticket_manager` */
   Binlog_group_commit_ctx m_binlog_group_commit_ctx;
   std::vector<std::function<bool()>> m_post_filters_actions;
   /** If this thread is a channel, what is its type*/
@@ -476,13 +392,6 @@ class Rpl_thd_context {
     return m_last_used_gtid_tracker_ctx;
   }
 
-  /**
-    Retrieves the class member responsible for managing the interaction
-    with `Bgc_ticket_manager`.
-
-    @return The class member responsible for managing the interaction
-            with `Bgc_ticket_manager`.
-   */
   Binlog_group_commit_ctx &binlog_group_commit_ctx();
 
   enum_rpl_channel_type get_rpl_channel_type() { return rpl_channel_type; }

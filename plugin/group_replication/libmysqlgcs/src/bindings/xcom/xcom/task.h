@@ -39,39 +39,6 @@
 #include "xcom/node_connection.h"
 #include "xcom/result.h"
 
-/** \file
-        Rudimentary task system in portable C, based on Tom Duff's switch-based
-   coroutine trick
-        and a stack of environment structs. (continuations?)
-        Nonblocking IO and event handling need to be rewritten for each new OS.
-*/
-
-#ifdef TASK_EVENT_TRACE
-void add_base_event(double when, char const *file, int state);
-#define ADD_BASE_EVENT                               \
-  {                                                  \
-    add_base_event(seconds(), __FILE__, __LINE__);   \
-    add_event(EVENT_DUMP_PAD, string_arg(__func__)); \
-  }
-
-#define ADD_DBG(d, x)                     \
-  if (do_dbg(d)) {                        \
-    ADD_BASE_EVENT x;                     \
-    add_event(EVENT_DUMP_PAD, end_arg()); \
-  }
-
-#define ADD_EVENTS(x) ADD_DBG(D_BUG, x)
-
-#define ADD_T_EV(when, file, state, what)
-#define ADD_WAIT_EV(when, file, state, what, milli)
-
-#else
-#define ADD_EVENTS(x)
-#define ADD_DBG(d, x)
-#define ADD_T_EV(when, file, state, what)
-#define ADD_WAIT_EV(when, file, state, what, milli)
-#endif
-
 static inline void set_int_arg(task_arg *arg, int value) {
   arg->type = a_int;
   arg->val.i = value;
@@ -276,16 +243,6 @@ typedef struct task_queue task_queue;
 
 #define TASK_ALLOC(pool, type) (task_allocate(pool, (unsigned int)sizeof(type)))
 
-#if 0
-#define TASK_DEBUG(x)                                            \
-  if (stack->debug) {                                            \
-    IFDBG(D_NONE, FN; STRLIT(x " task "); PTREXP((void *)stack); \
-          STRLIT(stack->name); NDBG(stack->sp->state, d));       \
-  }
-#else
-#define TASK_DEBUG(x)
-#endif
-
 /* Place cleanup code after this label */
 #define FINALLY \
   task_cleanup:
@@ -302,18 +259,18 @@ typedef struct task_queue task_queue;
 
 #define TERMINATE goto task_cleanup
 
+#define TASK_STACK_DEBUG                                          \
+  if (stack->debug) {                                             \
+    char *fnpos = strrchr(__FILE__, DIR_SEP);                     \
+    if (fnpos)                                                    \
+      fnpos++;                                                    \
+    else                                                          \
+      fnpos = __FILE__;                                           \
+  }
+
 /* Switch on task state. The first time, allocate a new stack frame and check
  * for termination */
 #define TASK_BEGIN                                            \
-  /* assert(ep);   */                                         \
-  ADD_DBG(                                                    \
-      D_TASK,                                                 \
-      if (stack->sp->state) {                                 \
-        add_event(EVENT_DUMP_PAD, string_arg("state"));       \
-        add_event(EVENT_DUMP_PAD, int_arg(stack->sp->state)); \
-      } add_event(EVENT_DUMP_PAD, string_arg("TASK_BEGIN"));  \
-      add_event(EVENT_DUMP_PAD, void_arg(stack)););           \
-  TASK_DEBUG("TASK_BEGIN");                                   \
   switch (stack->sp->state) {                                 \
     case 0:                                                   \
       pushp(stack, TASK_ALLOC(stack, struct env));            \
@@ -324,14 +281,6 @@ typedef struct task_queue task_queue;
 
 /* This stack frame is finished, deallocate it and return 0 to signal exit */
 #define TASK_END                                              \
-  ADD_DBG(                                                    \
-      D_TASK,                                                 \
-      if (stack->sp->state) {                                 \
-        add_event(EVENT_DUMP_PAD, string_arg("state"));       \
-        add_event(EVENT_DUMP_PAD, int_arg(stack->sp->state)); \
-      } add_event(EVENT_DUMP_PAD, string_arg("TASK_END"));    \
-      add_event(EVENT_DUMP_PAD, void_arg(stack)););           \
-  TASK_DEBUG("TASK_END");                                     \
   stack->sp->state = 0;                                       \
   stack->where = (TaskAlign *)stack->sp->ptr;                 \
   assert(stack->where);                                       \
@@ -347,20 +296,10 @@ typedef struct task_queue task_queue;
     goto task_cleanup; \
   }
 
-#define TASK_DUMP_ERR                                          \
-  if (errno || SOCK_ERRNO || task_errno) {                     \
-    IFDBG(D_NONE, FN; NDBG(errno, d); STREXP(strerror(errno)); \
-          NDBG(SOCK_ERRNO, d); STREXP(strerror(SOCK_ERRNO));   \
-          NDBG(task_errno, d); STREXP(strerror(task_errno)));  \
-  }
-
 /* Assign -1 as exit code, execute cleanup code, and exit this stack frame */
 #define TASK_FAIL                                                          \
   {                                                                        \
     *ret = (-1);                                                           \
-    TASK_DUMP_ERR;                                                         \
-    IFDBG(D_NONE, FN; STRLIT("TASK_FAIL"));                                \
-    ADD_DBG(D_TASK, add_event(EVENT_DUMP_PAD, string_arg("task failed"))); \
     goto task_cleanup;                                                     \
   }
 
@@ -369,11 +308,9 @@ typedef struct task_queue task_queue;
 */
 #define TASK_YIELD                     \
   {                                    \
-    TASK_DEBUG("TASK_YIELD");          \
     stack->sp->state = __LINE__;       \
     return 1;                          \
     case __LINE__:                     \
-      TASK_DEBUG("RETURN FROM YIELD"); \
       ep = _ep;                        \
       assert(ep);                      \
       TERM_CHECK;                      \
@@ -381,7 +318,6 @@ typedef struct task_queue task_queue;
 
 #define TASK_DEACTIVATE            \
   {                                \
-    TASK_DEBUG("TASK_DEACTIVATE"); \
     task_deactivate(stack);        \
     TASK_YIELD;                    \
   }
@@ -391,7 +327,6 @@ typedef struct task_queue task_queue;
  */
 #define TASK_DELAY(t)                \
   {                                  \
-    TASK_DEBUG("TASK_DELAY");        \
     task_delay_until(seconds() + t); \
     TASK_YIELD;                      \
   }
@@ -401,7 +336,6 @@ typedef struct task_queue task_queue;
  */
 #define TASK_DELAY_UNTIL(t)         \
   {                                 \
-    TASK_DEBUG("TASK_DELAY_UNTIL"); \
     task_delay_until(t);            \
     TASK_YIELD;                     \
   }
@@ -409,7 +343,6 @@ typedef struct task_queue task_queue;
 /* Put the task in a wait queue, then yield */
 #define TASK_WAIT(queue)     \
   {                          \
-    TASK_DEBUG("TASK_WAIT"); \
     task_wait(stack, queue); \
     TASK_YIELD;              \
   }
@@ -417,7 +350,6 @@ typedef struct task_queue task_queue;
 /* Put the task in a wait queue with timeout, then yield */
 #define TIMED_TASK_WAIT(queue, t)      \
   {                                    \
-    TASK_DEBUG("TIMED_TASK_WAIT");     \
     task_delay_until(seconds() + (t)); \
     task_wait(stack, queue);           \
     TASK_YIELD;                        \
@@ -446,8 +378,6 @@ void channel_put_front(channel *c,
       TASK_WAIT(&(channel)->queue);                                \
     }                                                              \
     *(ptr) = (type *)link_extract_first(&(channel)->data);         \
-    IFDBG(D_TRANSPORT, FN; STRLIT("CHANNEL_GET "); PTREXP(*(ptr)); \
-          PTREXP(&((channel)->data)));                             \
   }
 
 #define CHANNEL_PEEK(channel, ptr, type)           \
@@ -474,7 +404,6 @@ void channel_put_front(channel *c,
 #define TASK_CALL(funcall)            \
   {                                   \
     reset_state(stack);               \
-    TASK_DEBUG("BEFORE CALL");        \
     do {                              \
       stack->sp--;                    \
       stack->taskret = funcall;       \
@@ -482,7 +411,6 @@ void channel_put_front(channel *c,
       TERM_CHECK;                     \
       if (stack->taskret) TASK_YIELD; \
     } while (stack->taskret);         \
-    TASK_DEBUG("AFTER CALL");         \
   }
 
 /* Define the typeless struct which is the container for all variables in the
@@ -518,24 +446,6 @@ void channel_put_front(channel *c,
 /* Unlock a fd */
 #define UNLOCK_FD(fd, op) unlock_fd(fd, stack, op)
 
-#ifdef TASK_EVENT_TRACE
-enum { EVENT_DUMP_PAD = 1, EVENT_DUMP_HEX = 2 };
-
-struct task_event {
-  task_arg arg;
-  int flag;
-};
-
-typedef struct task_event task_event;
-
-void add_event(int flag, task_arg te);
-void add_task_event(double when, char const *file, int state, char const *what);
-void add_wait_event(double when, char const *file, int state, char const *what,
-                    int milli);
-void dump_task_events();
-void reset_task_events();
-#endif
-
 /* The current task */
 extern task_env *stack;
 
@@ -544,6 +454,7 @@ extern void reset_state(task_env *p);
 extern void pushp(task_env *p, void *ptr);
 extern void popp(task_env *p);
 
+extern unsigned long long int get_micro_time();
 extern double seconds();  /* Return time as double */
 extern double task_now(); /* Return result of last call to seconds() */
 extern void task_delay_until(double time);
@@ -594,6 +505,7 @@ extern task_env *wait_io(task_env *t, int fd, int op);
 
 extern result con_write(connection_descriptor const *wfd, void *buf, int n);
 extern result set_nodelay(int fd);
+extern bool retrieve_addr_from_fd(int fd, bool client, char *ip, int *port);
 
 extern task_env *timed_wait_io(task_env *t, int fd, int op, double timeout);
 

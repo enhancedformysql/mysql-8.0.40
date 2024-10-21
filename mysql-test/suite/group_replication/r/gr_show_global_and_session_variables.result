@@ -7,8 +7,8 @@ Note	####	Storing MySQL user name or password information in the connection meta
 include/start_and_bootstrap_group_replication.inc
 include/stop_group_replication.inc
 
-# Test#1: Basic check that there are 61 GR variables.
-include/assert.inc [There are 61 GR variables at present.]
+# Test#1: Basic check that there are 51 GR variables.
+include/assert.inc [There are 51 GR variables at present.]
 
 # Test#2: Verify group replication related variables at GLOBAL scope.
 SET @@SESSION.group_replication_allow_local_lower_version_join= 1;
@@ -21,8 +21,6 @@ SET @@SESSION.group_replication_components_stop_timeout= 1;
 ERROR HY000: Variable 'group_replication_components_stop_timeout' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_compression_threshold= 1;
 ERROR HY000: Variable 'group_replication_compression_threshold' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@SESSION.group_replication_enforce_update_everywhere_checks= 1;
-ERROR HY000: Variable 'group_replication_enforce_update_everywhere_checks' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_force_members= "";
 ERROR HY000: Variable 'group_replication_force_members' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_group_name= "aaaaaaaa-cccc-bbbb-cccc-aaaaaaaaaaaa";
@@ -61,8 +59,6 @@ SET @@SESSION.group_replication_recovery_ssl_verify_server_cert= 1;
 ERROR HY000: Variable 'group_replication_recovery_ssl_verify_server_cert' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_recovery_use_ssl= 1;
 ERROR HY000: Variable 'group_replication_recovery_use_ssl' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@SESSION.group_replication_single_primary_mode= 0;
-ERROR HY000: Variable 'group_replication_single_primary_mode' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_ssl_mode= "REQUIRED";
 ERROR HY000: Variable 'group_replication_ssl_mode' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_start_on_boot= 1;
@@ -97,8 +93,6 @@ SET @@SESSION.group_replication_recovery_tls_ciphersuites= "";
 ERROR HY000: Variable 'group_replication_recovery_tls_ciphersuites' is a GLOBAL variable and should be set with SET GLOBAL
 SET @@SESSION.group_replication_view_change_uuid= "AUTOMATIC";
 ERROR HY000: Variable 'group_replication_view_change_uuid' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@SESSION.group_replication_paxos_single_leader= 1;
-ERROR HY000: Variable 'group_replication_paxos_single_leader' is a GLOBAL variable and should be set with SET GLOBAL
 Warnings:
 Warning	1681	'group_replication_recovery_complete_at' is deprecated and will be removed in a future release.
 Warnings:
@@ -135,10 +129,6 @@ include/assert.inc [Verify GLOBAL value of group_replication_compression_thresho
 include/assert.inc [Verify GLOBAL value of group_replication_compression_threshold]
 include/assert.inc [Verify SESSION value of group_replication_compression_threshold]
 include/assert.inc [Verify SESSION value of group_replication_compression_threshold]
-include/assert.inc [Verify GLOBAL value of group_replication_enforce_update_everywhere_checks]
-include/assert.inc [Verify GLOBAL value of group_replication_enforce_update_everywhere_checks]
-include/assert.inc [Verify SESSION value of group_replication_enforce_update_everywhere_checks]
-include/assert.inc [Verify SESSION value of group_replication_enforce_update_everywhere_checks]
 include/assert.inc [Verify GLOBAL value of group_replication_force_members]
 include/assert.inc [Verify GLOBAL value of group_replication_force_members]
 include/assert.inc [Verify SESSION value of group_replication_force_members]
@@ -215,10 +205,6 @@ include/assert.inc [Verify GLOBAL value of group_replication_recovery_use_ssl]
 include/assert.inc [Verify GLOBAL value of group_replication_recovery_use_ssl]
 include/assert.inc [Verify SESSION value of group_replication_recovery_use_ssl]
 include/assert.inc [Verify SESSION value of group_replication_recovery_use_ssl]
-include/assert.inc [Verify GLOBAL value of group_replication_single_primary_mode]
-include/assert.inc [Verify GLOBAL value of group_replication_single_primary_mode]
-include/assert.inc [Verify SESSION value of group_replication_single_primary_mode]
-include/assert.inc [Verify SESSION value of group_replication_single_primary_mode]
 include/assert.inc [Verify GLOBAL value of group_replication_ssl_mode]
 include/assert.inc [Verify GLOBAL value of group_replication_ssl_mode]
 include/assert.inc [Verify SESSION value of group_replication_ssl_mode]
@@ -288,10 +274,6 @@ include/assert.inc [Verify GLOBAL value of group_replication_recovery_tls_cipher
 include/assert.inc [Verify SESSION value of group_replication_recovery_tls_ciphersuites]
 include/assert.inc [Verify SESSION value of group_replication_recovery_tls_ciphersuites]
 include/assert.inc [Verify SESSION value of group_replication_view_change_uuid]
-include/assert.inc [Verify GLOBAL value of group_replication_paxos_single_leader]
-include/assert.inc [Verify GLOBAL value of group_replication_paxos_single_leader]
-include/assert.inc [Verify SESSION value of group_replication_paxos_single_leader]
-include/assert.inc [Verify SESSION value of group_replication_paxos_single_leader]
 
 # Clean up
 include/stop_group_replication.inc

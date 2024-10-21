@@ -97,8 +97,6 @@ SET @@GLOBAL.DEBUG= '-d,launch_hook_trans_begin_assert_if_hold';
 SET GLOBAL group_replication_group_name= "GROUP_NAME";
 SET GLOBAL group_replication_local_address= "GROUP_LOCAL_ADDRESS2";
 SET GLOBAL group_replication_group_seeds= "GROUP_SEEDS_SERVER2";
-SET GLOBAL group_replication_enforce_update_everywhere_checks= FALSE;;
-SET GLOBAL group_replication_single_primary_mode= TRUE;;
 SET @@SESSION.group_replication_consistency= DEFAULT;
 include/group_replication_end.inc
 Warnings:

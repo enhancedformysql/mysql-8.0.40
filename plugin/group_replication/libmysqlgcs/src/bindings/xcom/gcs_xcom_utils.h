@@ -79,6 +79,8 @@ class Gcs_xcom_utils {
    */
   static uint32_t mhash(const unsigned char *buf, size_t length);
 
+  static void update_xcom_cache_mode_for_paxos(int new_mode);
+
   static int init_net();
   static int deinit_net();
 

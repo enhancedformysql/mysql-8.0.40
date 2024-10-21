@@ -26,10 +26,8 @@
 #include "mutex_lock.h"            // MUTEX_LOCK
 #include "mysql/psi/mysql_cond.h"  // mysql_cond_timedwait
 #include "sql/binlog.h"
-#include "sql/binlog/group_commit/bgc_ticket_manager.h"  // Bgc_ticket_manager
 #include "sql/debug_sync.h"                              // DEBUG_SYNC
 #include "sql/mysqld.h"       //PSI_stage_info stage_wait_on_commit_ticket
-#include "sql/raii/sentry.h"  // raii::Sentry<>
 #include "sql/rpl_commit_stage_manager.h"
 #include "sql/rpl_replica_commit_order_manager.h"  // Commit_order_manager
 #include "sql/rpl_rli_pdb.h"                       // Slave_worker
@@ -103,10 +101,8 @@ void Commit_stage_manager::init(PSI_mutex_key key_LOCK_flush_queue,
                                 PSI_mutex_key key_LOCK_commit_queue,
                                 PSI_mutex_key key_LOCK_after_commit_queue,
                                 PSI_mutex_key key_LOCK_done,
-                                PSI_mutex_key key_LOCK_wait_for_group_turn,
                                 PSI_cond_key key_COND_done,
-                                PSI_cond_key key_COND_flush_queue,
-                                PSI_cond_key key_COND_wait_for_group_turn) {
+                                PSI_cond_key key_COND_flush_queue) {
   if (m_is_initialized) return;
   m_is_initialized = true;
 
@@ -114,8 +110,6 @@ void Commit_stage_manager::init(PSI_mutex_key key_LOCK_flush_queue,
   mysql_cond_init(key_COND_done, &m_stage_cond_binlog);
   mysql_cond_init(key_COND_done, &m_stage_cond_commit_order);
   mysql_cond_init(key_COND_flush_queue, &m_stage_cond_leader);
-  mysql_cond_init(key_COND_wait_for_group_turn,
-                  &this->m_cond_wait_for_ticket_turn);
 #ifndef NDEBUG
   leader_thd = nullptr;
 
@@ -137,8 +131,6 @@ void Commit_stage_manager::init(PSI_mutex_key key_LOCK_flush_queue,
                    MY_MUTEX_INIT_FAST);
   mysql_mutex_init(key_LOCK_after_commit_queue,
                    &m_queue_lock[AFTER_COMMIT_STAGE], MY_MUTEX_INIT_FAST);
-  mysql_mutex_init(key_LOCK_wait_for_group_turn,
-                   &this->m_lock_wait_for_ticket_turn, MY_MUTEX_INIT_FAST);
 
   m_queue[BINLOG_FLUSH_STAGE].init(&m_queue_lock[BINLOG_FLUSH_STAGE]);
   m_queue[SYNC_STAGE].init(&m_queue_lock[SYNC_STAGE]);
@@ -160,60 +152,6 @@ void Commit_stage_manager::deinit() {
   mysql_cond_destroy(&m_stage_cond_commit_order);
   mysql_cond_destroy(&m_stage_cond_leader);
   mysql_mutex_destroy(&m_lock_done);
-  mysql_cond_destroy(&this->m_cond_wait_for_ticket_turn);
-  mysql_mutex_destroy(&this->m_lock_wait_for_ticket_turn);
-}
-
-void Commit_stage_manager::wait_for_ticket_turn(THD *thd,
-                                                bool update_ticket_manager) {
-  auto &ticket_ctx = thd->rpl_thd_ctx.binlog_group_commit_ctx();
-  if (ticket_ctx.has_waited()) return;
-
-  auto &ticket_manager = binlog::Bgc_ticket_manager::instance();
-  binlog::BgcTicket ticket(ticket_ctx.get_session_ticket());
-
-  CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("before_wait_on_ticket");
-  // Check, first, if the session ticket is already being processed, to avoid
-  // acquiring the mutex
-  if (ticket != ticket_manager.get_front_ticket() &&
-      ticket > ticket_manager.get_coalesced_ticket() && !thd->killed) {
-    CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP("inside_wait_on_ticket");
-    PSI_stage_info old_stage;
-    {
-      MUTEX_LOCK(guard, &this->m_lock_wait_for_ticket_turn);
-      thd->ENTER_COND(&this->m_cond_wait_for_ticket_turn,
-                      &this->m_lock_wait_for_ticket_turn,
-                      &stage_wait_on_commit_ticket, &old_stage);
-      struct timespec abstime;
-      while (ticket != ticket_manager.get_front_ticket() &&
-             ticket > ticket_manager.get_coalesced_ticket() && !thd->killed) {
-        // in rare cases View Changes cause ticket changes with no broadcast
-        set_timespec(&abstime, 1);
-        mysql_cond_timedwait(&this->m_cond_wait_for_ticket_turn,
-                             &this->m_lock_wait_for_ticket_turn, &abstime);
-      }
-    }
-    thd->EXIT_COND(&old_stage);
-  }
-
-#ifndef NDEBUG
-  if (Binlog_group_commit_ctx::manual_ticket_setting()->load()) {
-    assert(ticket >= ticket_manager.get_coalesced_ticket());
-  }
-#endif
-
-  if (update_ticket_manager) {
-    this->update_session_ticket_state(thd);
-  }
-}
-
-bool Commit_stage_manager::append_to(StageID stage, THD *thd) {
-  this->wait_for_ticket_turn(thd, false);
-  raii::Sentry<> _ticket_guard{
-      [thd, this]() -> void { this->update_session_ticket_state(thd); }};
-
-  lock_queue(stage);
-  return m_queue[stage].append(thd);
 }
 
 bool Commit_stage_manager::enroll_for(StageID stage, THD *thd,
@@ -225,8 +163,8 @@ bool Commit_stage_manager::enroll_for(StageID stage, THD *thd,
   DBUG_PRINT("debug",
              ("Enqueue 0x%llx to queue for stage %d", (ulonglong)thd, stage));
 
-  thd->rpl_thd_ctx.binlog_group_commit_ctx().assign_ticket();
-  bool leader = this->append_to(stage, thd);
+  lock_queue(stage);
+  bool leader = m_queue[stage].append(thd);
 
   /*
    if its FLUSH stage queue (BINLOG_FLUSH_STAGE or COMMIT_ORDER_FLUSH_STAGE)
@@ -341,10 +279,16 @@ bool Commit_stage_manager::enroll_for(StageID stage, THD *thd,
     if (leader_await_preempt_status) mysql_cond_signal(&m_cond_preempt);
 #endif
     while (thd->tx_commit_pending) {
-      if (stage == COMMIT_ORDER_FLUSH_STAGE) {
-        mysql_cond_wait(&m_stage_cond_commit_order, &m_lock_done);
+      if (thd->thr_cond_lock_inited) {
+        thd->tx_commit_signal_independently = true;
+        mysql_cond_wait(&thd->thr_cond_lock, &m_lock_done);
       } else {
-        mysql_cond_wait(&m_stage_cond_binlog, &m_lock_done);
+        thd->tx_commit_signal_independently = false;
+        if (stage == COMMIT_ORDER_FLUSH_STAGE) {
+          mysql_cond_wait(&m_stage_cond_commit_order, &m_lock_done);
+        } else {
+          mysql_cond_wait(&m_stage_cond_binlog, &m_lock_done);
+        }
       }
     }
 
@@ -379,8 +323,15 @@ bool Commit_stage_manager::enroll_for(StageID stage, THD *thd,
       /* wait for signal from binlog leader */
       CONDITIONAL_SYNC_POINT_FOR_TIMESTAMP(
           "before_commit_order_leader_waits_for_binlog_leader");
-      while (thd->tx_commit_pending)
-        mysql_cond_wait(&m_stage_cond_commit_order, &m_lock_done);
+      while (thd->tx_commit_pending) {
+        if (thd->thr_cond_lock_inited) {
+          thd->tx_commit_signal_independently = true;
+          mysql_cond_wait(&thd->thr_cond_lock, &m_lock_done);
+        } else {
+          thd->tx_commit_signal_independently = false;
+          mysql_cond_wait(&m_stage_cond_commit_order, &m_lock_done);
+        }
+      }
       mysql_mutex_unlock(&m_lock_done);
 
       leader = false;
@@ -462,80 +413,32 @@ void Commit_stage_manager::process_final_stage_for_ordered_commit_group(
   }
 }
 
-void Commit_stage_manager::signal_done(THD *queue, StageID stage) {
+void Commit_stage_manager::signal_done(THD *queue, StageID stage [[maybe_unused]]) {
+  size_t counter = 0;
+  size_t signal_independent_counter = 0;
+
   mysql_mutex_lock(&m_lock_done);
 
   for (THD *thd = queue; thd; thd = thd->next_to_commit) {
     thd->tx_commit_pending = false;
     thd->rpl_thd_ctx.binlog_group_commit_ctx().reset();
-  }
-
-  /* if thread belong to commit order wake only commit order queue threads */
-  if (stage == COMMIT_ORDER_FLUSH_STAGE)
-    mysql_cond_broadcast(&m_stage_cond_commit_order);
-  else
-    mysql_cond_broadcast(&m_stage_cond_binlog);
-
-  mysql_mutex_unlock(&m_lock_done);
-}
-
-void Commit_stage_manager::signal_end_of_ticket(bool force) {
-  auto &ticket_manager = binlog::Bgc_ticket_manager::instance();
-  // Check, first, if there are any tickets other than the active, to avoid
-  // taking the mutex.
-  if (force ||
-      ticket_manager.get_front_ticket() != ticket_manager.get_back_ticket()) {
-    auto [previous_front, current_front] = ticket_manager.pop_front_ticket();
-    // if pop was successful - front changed, notify waiting threads
-    if (force || previous_front != current_front) {
-      MUTEX_LOCK(guard, &this->m_lock_wait_for_ticket_turn);
-      mysql_cond_broadcast(&this->m_cond_wait_for_ticket_turn);
+    counter++;
+    if (thd->tx_commit_signal_independently) {
+      signal_independent_counter++;
+      thd->tx_commit_signal_independently = false;
+      mysql_cond_broadcast(&thd->thr_cond_lock);
     }
   }
-}
 
-void Commit_stage_manager::update_session_ticket_state(THD *thd) {
-  auto &ticket_ctx = thd->rpl_thd_ctx.binlog_group_commit_ctx();
-  if (ticket_ctx.has_waited()) return;
-  if (ticket_ctx.get_session_ticket() >
-      binlog::Bgc_ticket_manager::instance().get_coalesced_ticket())
-    this->update_ticket_manager(1, ticket_ctx.get_session_ticket());
-  ticket_ctx.mark_as_already_waited();
-}
-
-void Commit_stage_manager::update_ticket_manager(
-    std::uint64_t sessions_count, const binlog::BgcTicket &session_ticket) {
-  auto &ticket_manager = binlog::Bgc_ticket_manager::instance();
-  ticket_manager.add_processed_sessions_to_front_ticket(sessions_count,
-                                                        session_ticket);
-
-  DBUG_EXECUTE_IF("rpl_end_of_ticket_blocked", {
-    const char act[] =
-        "now signal signal.end_of_ticket_waiting wait_for "
-        "signal.end_of_ticket_continue";
-    assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
-  });
-
-  this->signal_end_of_ticket();
-}
-
-void Commit_stage_manager::finish_session_ticket(THD *thd) {
-  auto &ticket_ctx = thd->rpl_thd_ctx.binlog_group_commit_ctx();
-  if (ticket_ctx.get_session_ticket().is_set()) {
-    this->wait_for_ticket_turn(thd);
-    ticket_ctx.reset();
+  if (counter != signal_independent_counter) {
+    if (stage == COMMIT_ORDER_FLUSH_STAGE) {
+      mysql_cond_broadcast(&m_stage_cond_commit_order);
+    } else {
+      mysql_cond_broadcast(&m_stage_cond_binlog);
+    }
   }
-}
 
-void Commit_stage_manager::disable_manual_session_tickets() {
-  if (!Binlog_group_commit_ctx::manual_ticket_setting()->load()) return;
-  Binlog_group_commit_ctx::manual_ticket_setting()->store(false);
-  binlog::Bgc_ticket_manager::instance().coalesce();
-  Commit_stage_manager::get_instance().signal_end_of_ticket(true);
-}
-
-void Commit_stage_manager::enable_manual_session_tickets() {
-  Binlog_group_commit_ctx::manual_ticket_setting()->store(true);
+  mysql_mutex_unlock(&m_lock_done);
 }
 
 #ifndef NDEBUG

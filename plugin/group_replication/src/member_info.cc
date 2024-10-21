@@ -30,6 +30,7 @@
 #include "my_dbug.h"
 
 #include "plugin/group_replication/include/plugin_constants.h"
+#include "sql/rpl_gtid.h"
 
 using std::map;
 using std::string;
@@ -46,7 +47,6 @@ Group_member_info::Group_member_info(PSI_mutex_key psi_mutex_key_arg)
       unreachable(false),
       role(MEMBER_ROLE_SECONDARY),
       configuration_flags(0),
-      conflict_detection_enable(true),
       member_weight(0),
       lower_case_table_names(false),
       default_table_encryption(false),
@@ -54,11 +54,7 @@ Group_member_info::Group_member_info(PSI_mutex_key psi_mutex_key_arg)
       primary_election_running(false),
       recovery_endpoints("DEFAULT"),
       m_view_change_uuid("AUTOMATIC"),
-      m_allow_single_leader(false),
-#ifndef NDEBUG
-      skip_encode_default_table_encryption(false),
-      m_skip_encode_view_change_uuid(false),
-#endif
+      single_primary_election_mode(0),
       psi_mutex_key(psi_mutex_key_arg) {
   mysql_mutex_init(psi_mutex_key, &update_lock, MY_MUTEX_INIT_FAST);
 }
@@ -70,11 +66,10 @@ Group_member_info::Group_member_info(
     Group_member_info::Group_member_status status_arg,
     Member_version &member_version_arg,
     ulonglong gtid_assignment_block_size_arg,
-    Group_member_info::Group_member_role role_arg, bool in_single_primary_mode,
-    bool has_enforces_update_everywhere_checks, uint member_weight_arg,
+    Group_member_info::Group_member_role role_arg, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
     const char *recovery_endpoints_arg, const char *view_change_uuid_arg,
-    bool allow_single_leader, PSI_mutex_key psi_mutex_key_arg)
+    int single_primary_election_mode_arg, PSI_mutex_key psi_mutex_key_arg)
     : Plugin_gcs_message(CT_MEMBER_INFO_MESSAGE),
       hostname(hostname_arg),
       port(port_arg),
@@ -85,7 +80,6 @@ Group_member_info::Group_member_info(
       unreachable(false),
       role(role_arg),
       configuration_flags(0),
-      conflict_detection_enable(!in_single_primary_mode),
       member_weight(member_weight_arg),
       lower_case_table_names(lower_case_table_names_arg),
       default_table_encryption(default_table_encryption_arg),
@@ -95,22 +89,12 @@ Group_member_info::Group_member_info(
                                                 : "DEFAULT"),
       m_view_change_uuid(view_change_uuid_arg ? view_change_uuid_arg
                                               : "AUTOMATIC"),
-      m_allow_single_leader(allow_single_leader),
-#ifndef NDEBUG
-      skip_encode_default_table_encryption(false),
-      m_skip_encode_view_change_uuid(false),
-#endif
+      single_primary_election_mode(single_primary_election_mode_arg),
       psi_mutex_key(psi_mutex_key_arg) {
+      
   mysql_mutex_init(psi_mutex_key, &update_lock, MY_MUTEX_INIT_FAST);
   gcs_member_id = new Gcs_member_identifier(gcs_member_id_arg);
   member_version = new Member_version(member_version_arg.get_version());
-
-  /* Handle single_primary_mode */
-  if (in_single_primary_mode) configuration_flags |= CNF_SINGLE_PRIMARY_MODE_F;
-
-  /* Handle enforce_update_everywhere_checks */
-  if (has_enforces_update_everywhere_checks)
-    configuration_flags |= CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
 }
 
 Group_member_info::Group_member_info(Group_member_info &other)
@@ -128,7 +112,6 @@ Group_member_info::Group_member_info(Group_member_info &other)
       unreachable(other.is_unreachable()),
       role(other.get_role()),
       configuration_flags(other.get_configuration_flags()),
-      conflict_detection_enable(other.is_conflict_detection_enabled()),
       member_weight(other.get_member_weight()),
       lower_case_table_names(other.get_lower_case_table_names()),
       default_table_encryption(other.get_default_table_encryption()),
@@ -136,14 +119,10 @@ Group_member_info::Group_member_info(Group_member_info &other)
       primary_election_running(other.is_primary_election_running()),
       recovery_endpoints(other.get_recovery_endpoints()),
       m_view_change_uuid(other.get_view_change_uuid()),
-      m_allow_single_leader(other.get_allow_single_leader()),
       m_group_action_running_name(other.get_group_action_running_name()),
       m_group_action_running_description(
           other.get_group_action_running_description()),
-#ifndef NDEBUG
-      skip_encode_default_table_encryption(false),
-      m_skip_encode_view_change_uuid(false),
-#endif
+      single_primary_election_mode(other.in_single_primary_election_mode()),
       psi_mutex_key(other.psi_mutex_key) {
   mysql_mutex_init(psi_mutex_key, &update_lock, MY_MUTEX_INIT_FAST);
   gcs_member_id =
@@ -163,11 +142,7 @@ Group_member_info::Group_member_info(const uchar *data, size_t len,
       primary_election_running(false),
       recovery_endpoints("DEFAULT"),
       m_view_change_uuid("AUTOMATIC"),
-      m_allow_single_leader(false),
-#ifndef NDEBUG
-      skip_encode_default_table_encryption(false),
-      m_skip_encode_view_change_uuid(false),
-#endif
+      single_primary_election_mode(0),
       psi_mutex_key(psi_mutex_key_arg) {
   mysql_mutex_init(psi_mutex_key, &update_lock, MY_MUTEX_INIT_FAST);
   decode(data, len);
@@ -186,11 +161,10 @@ void Group_member_info::update(
     Group_member_info::Group_member_status status_arg,
     Member_version &member_version_arg,
     ulonglong gtid_assignment_block_size_arg,
-    Group_member_info::Group_member_role role_arg, bool in_single_primary_mode,
-    bool has_enforces_update_everywhere_checks, uint member_weight_arg,
+    Group_member_info::Group_member_role role_arg, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
     const char *recovery_endpoints_arg, const char *view_change_uuid_arg,
-    bool allow_single_leader) {
+    int single_primary_election_mode_arg) {
   MUTEX_LOCK(lock, &update_lock);
 
   hostname.assign(hostname_arg);
@@ -201,13 +175,13 @@ void Group_member_info::update(
   gtid_assignment_block_size = gtid_assignment_block_size_arg;
   unreachable = false;
   role = role_arg;
-  conflict_detection_enable = !in_single_primary_mode;
   member_weight = member_weight_arg;
   lower_case_table_names = lower_case_table_names_arg;
   default_table_encryption = default_table_encryption_arg;
   group_action_running = false;
   primary_election_running = false;
 
+  single_primary_election_mode = single_primary_election_mode_arg;
   executed_gtid_set.clear();
   purged_gtid_set.clear();
   retrieved_gtid_set.clear();
@@ -218,16 +192,11 @@ void Group_member_info::update(
   member_version = new Member_version(member_version_arg.get_version());
 
   configuration_flags = 0;
-  /* Handle single_primary_mode */
-  if (in_single_primary_mode) configuration_flags |= CNF_SINGLE_PRIMARY_MODE_F;
-  /* Handle enforce_update_everywhere_checks */
-  if (has_enforces_update_everywhere_checks)
-    configuration_flags |= CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
 
   recovery_endpoints.assign(recovery_endpoints_arg);
 
   m_view_change_uuid.assign(view_change_uuid_arg);
-  m_allow_single_leader = allow_single_leader;
+
 }
 
 void Group_member_info::update(Group_member_info &other) {
@@ -249,7 +218,6 @@ void Group_member_info::update(Group_member_info &other) {
   unreachable = other.is_unreachable();
   role = other.get_role();
   configuration_flags = other.get_configuration_flags();
-  conflict_detection_enable = other.is_conflict_detection_enabled();
   member_weight = other.get_member_weight();
   lower_case_table_names = other.get_lower_case_table_names();
   default_table_encryption = other.get_default_table_encryption();
@@ -257,15 +225,9 @@ void Group_member_info::update(Group_member_info &other) {
   primary_election_running = other.is_primary_election_running();
   recovery_endpoints.assign(other.get_recovery_endpoints());
   m_view_change_uuid.assign(other.get_view_change_uuid());
-  m_allow_single_leader = other.get_allow_single_leader();
   m_group_action_running_name.assign(other.get_group_action_running_name());
-  m_group_action_running_description.assign(
-      other.get_group_action_running_description());
-#ifndef NDEBUG
-  skip_encode_default_table_encryption =
-      other.skip_encode_default_table_encryption;
-  m_skip_encode_view_change_uuid = other.m_skip_encode_view_change_uuid;
-#endif
+  m_group_action_running_description.assign(other.get_group_action_running_description());
+  single_primary_election_mode = other.in_single_primary_election_mode();
 }
 
 /*
@@ -318,10 +280,7 @@ void Group_member_info::encode_payload(
   encode_payload_item_int4(buffer, PIT_CONFIGURATION_FLAGS,
                            configuration_flags_aux);
 
-  /*
-    MySQL 5.7.18+ payloads
-  */
-  char conflict_detection_enable_aux = conflict_detection_enable ? '1' : '0';
+  char conflict_detection_enable_aux = '0';
   encode_payload_item_char(buffer, PIT_CONFLICT_DETECTION_ENABLE,
                            conflict_detection_enable_aux);
 
@@ -349,9 +308,6 @@ void Group_member_info::encode_payload(
                            is_election_running_aux);
 
   char default_table_encryption_aux = default_table_encryption ? '1' : '0';
-#ifndef NDEBUG
-  if (!skip_encode_default_table_encryption)
-#endif
     encode_payload_item_char(buffer, PIT_DEFAULT_TABLE_ENCRYPTION,
                              default_table_encryption_aux);
 
@@ -362,16 +318,9 @@ void Group_member_info::encode_payload(
                              recovery_endpoints.c_str(),
                              recovery_endpoints.length());
 
-#ifndef NDEBUG
-  if (!m_skip_encode_view_change_uuid)
-#endif
-    encode_payload_item_string(buffer, PIT_VIEW_CHANGE_UUID,
+  encode_payload_item_string(buffer, PIT_VIEW_CHANGE_UUID,
                                m_view_change_uuid.c_str(),
                                m_view_change_uuid.length());
-
-  char allow_single_leader_aux = m_allow_single_leader ? '1' : '0';
-  encode_payload_item_char(buffer, PIT_ALLOW_SINGLE_LEADER,
-                           allow_single_leader_aux);
 
   if (group_action_running) {
     encode_payload_item_string(buffer, PIT_GROUP_ACTION_RUNNING_NAME,
@@ -452,10 +401,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
     switch (payload_item_type) {
       case PIT_CONFLICT_DETECTION_ENABLE:
         if (slider + payload_item_length <= end) {
-          unsigned char conflict_detection_enable_aux = *slider;
           slider += payload_item_length;
-          conflict_detection_enable =
-              (conflict_detection_enable_aux == '1') ? true : false;
         }
         break;
 
@@ -529,14 +475,6 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
         }
         break;
 
-      case PIT_ALLOW_SINGLE_LEADER:
-        if (slider + payload_item_length <= end) {
-          unsigned char allow_single_leader_aux = *slider;
-          slider += payload_item_length;
-          m_allow_single_leader =
-              (allow_single_leader_aux == '1') ? true : false;
-        }
-        break;
       case PIT_GROUP_ACTION_RUNNING_NAME:
         if (slider + payload_item_length <= end) {
           m_group_action_running_name.assign(
@@ -551,6 +489,13 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
               reinterpret_cast<const char *>(slider),
               static_cast<size_t>(payload_item_length));
           slider += payload_item_length;
+        }
+        break;
+      case PIT_MEMBER_GTID_MODE:
+        if (slider + payload_item_length <= end) {
+          int single_primary_election_mode_aux = *slider;
+          slider += payload_item_length;
+          single_primary_election_mode = single_primary_election_mode_aux;
         }
         break;
     }
@@ -663,45 +608,18 @@ uint32 Group_member_info::get_configuration_flags() {
   return configuration_flags;
 }
 
-void Group_member_info::set_primary_mode_flag(bool set_primary_mode) {
-  MUTEX_LOCK(lock, &update_lock);
-  if (set_primary_mode && !(configuration_flags & CNF_SINGLE_PRIMARY_MODE_F)) {
-    configuration_flags |= CNF_SINGLE_PRIMARY_MODE_F;
-  } else if (!set_primary_mode &&
-             configuration_flags & CNF_SINGLE_PRIMARY_MODE_F) {
-    configuration_flags ^= CNF_SINGLE_PRIMARY_MODE_F;
-  }
-}
-
-void Group_member_info::set_enforces_update_everywhere_checks_flag(
-    bool enforce_everywhere_checks) {
-  MUTEX_LOCK(lock, &update_lock);
-  if (enforce_everywhere_checks &&
-      !(configuration_flags & CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F)) {
-    configuration_flags |= CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
-  } else if (!enforce_everywhere_checks &&
-             configuration_flags & CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F) {
-    configuration_flags ^= CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
-  }
-}
-
 bool Group_member_info::in_primary_mode_internal() {
-  return configuration_flags & CNF_SINGLE_PRIMARY_MODE_F;
-}
-
-bool Group_member_info::in_primary_mode() {
-  MUTEX_LOCK(lock, &update_lock);
-  return in_primary_mode_internal();
-}
-
-bool Group_member_info::has_enforces_update_everywhere_checks() {
-  MUTEX_LOCK(lock, &update_lock);
-  return configuration_flags & CNF_ENFORCE_UPDATE_EVERYWHERE_CHECKS_F;
+  return true;
 }
 
 uint Group_member_info::get_lower_case_table_names() {
   MUTEX_LOCK(lock, &update_lock);
   return lower_case_table_names;
+}
+
+void Group_member_info::set_is_primary_election_running(bool is_running) {
+  MUTEX_LOCK(lock, &update_lock);
+  primary_election_running = is_running;
 }
 
 bool Group_member_info::is_unreachable() {
@@ -722,21 +640,6 @@ void Group_member_info::set_unreachable() {
 void Group_member_info::set_reachable() {
   MUTEX_LOCK(lock, &update_lock);
   unreachable = false;
-}
-
-void Group_member_info::enable_conflict_detection() {
-  MUTEX_LOCK(lock, &update_lock);
-  conflict_detection_enable = true;
-}
-
-void Group_member_info::disable_conflict_detection() {
-  MUTEX_LOCK(lock, &update_lock);
-  conflict_detection_enable = false;
-}
-
-bool Group_member_info::is_conflict_detection_enabled() {
-  MUTEX_LOCK(lock, &update_lock);
-  return conflict_detection_enable;
 }
 
 void Group_member_info::set_member_weight(uint new_member_weight) {
@@ -780,11 +683,6 @@ void Group_member_info::set_group_action_running_description(
 bool Group_member_info::is_primary_election_running() {
   MUTEX_LOCK(lock, &update_lock);
   return primary_election_running;
-}
-
-void Group_member_info::set_is_primary_election_running(bool is_running) {
-  MUTEX_LOCK(lock, &update_lock);
-  primary_election_running = is_running;
 }
 
 bool Group_member_info::operator==(Group_member_info &other) {
@@ -865,11 +763,6 @@ string Group_member_info::get_view_change_uuid() {
   return m_view_change_uuid;
 }
 
-bool Group_member_info::get_allow_single_leader() {
-  MUTEX_LOCK(lock, &update_lock);
-  return m_allow_single_leader;
-}
-
 void Group_member_info::set_view_change_uuid(const char *view_change_cnf) {
   MUTEX_LOCK(lock, &update_lock);
   m_view_change_uuid.assign(view_change_cnf);
@@ -883,6 +776,16 @@ bool Group_member_info::comparator_group_member_uuid(Group_member_info *m1,
 bool Group_member_info::comparator_group_member_weight(Group_member_info *m1,
                                                        Group_member_info *m2) {
   return m1->has_greater_weight(m2);
+}
+
+bool Group_member_info::comparator_group_member_executed_gtid_first(
+    Group_member_info *m1, Group_member_info *m2) {
+  return m1->has_greater_executed_gtid(m2);
+}
+
+bool Group_member_info::comparator_group_member_weight_first(
+    Group_member_info *m1, Group_member_info *m2) {
+  return m1->has_greater_weight_and_executed_gtid(m2);
 }
 
 bool Group_member_info::has_greater_version(Group_member_info *other) {
@@ -901,14 +804,84 @@ bool Group_member_info::has_lower_uuid(Group_member_info *other) {
   return has_lower_uuid_internal(other);
 }
 
+int Group_member_info::compare_gtid(Group_member_info *other) {
+  int valid = 1;
+  Sid_map member_sid_map(nullptr);
+  Sid_map other_sid_map(nullptr);
+  Gtid_set member_set(&member_sid_map, nullptr);
+  Gtid_set other_set(&other_sid_map, nullptr);
+
+  std::string other_executed_gtid_set = other->get_gtid_executed();
+
+  const char *member_gtid_executed = executed_gtid_set.c_str();
+  const char *other_gtid_executed = other_executed_gtid_set.c_str();
+
+  if (member_set.add_gtid_text(member_gtid_executed) != RETURN_STATUS_OK ||
+      other_set.add_gtid_text(other_gtid_executed) != RETURN_STATUS_OK) {
+    valid = 0;
+  }
+
+  if (valid) {
+    if (!other_set.is_equals(&member_set)) {
+      if (other_set.is_subset(&member_set)) {
+        return 1;
+      } else {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+int Group_member_info::compare_weight(Group_member_info *other) {
+  if (member_weight > other->get_member_weight()) return 1;
+  if (member_weight == other->get_member_weight()) return 0;
+  return -1;
+}
+
+bool Group_member_info::has_greater_executed_gtid(Group_member_info *other) {
+  MUTEX_LOCK(lock, &update_lock);
+
+  int result = compare_gtid(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  result = compare_weight(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  return has_lower_uuid_internal(other);
+}
+
+bool Group_member_info::has_greater_weight_and_executed_gtid(
+    Group_member_info *other) {
+  MUTEX_LOCK(lock, &update_lock);
+
+  int result = compare_weight(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  result = compare_gtid(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
+
+  return has_lower_uuid_internal(other);
+}
+
 bool Group_member_info::has_greater_weight(Group_member_info *other) {
   MUTEX_LOCK(lock, &update_lock);
-  if (member_weight > other->get_member_weight()) return true;
 
-  if (member_weight == other->get_member_weight())
-    return has_lower_uuid_internal(other);
+  int result = compare_weight(other);
+  if (result != 0) {
+    return result == 1 ? true : false;
+  }
 
-  return false;
+  return has_lower_uuid_internal(other);
 }
 
 Group_member_info_manager::Group_member_info_manager(
@@ -1175,13 +1148,16 @@ void Group_member_info_manager::update_member_status(
   mysql_mutex_unlock(&update_lock);
 }
 
-void Group_member_info_manager::set_member_unreachable(
+bool Group_member_info_manager::set_member_unreachable(
     const std::string &uuid) {
   MUTEX_LOCK(lock, &update_lock);
 
   auto it = members->find(uuid);
   if (it != members->end()) {
     (*it).second->set_unreachable();
+    return true;
+  } else {
+    return false;
   }
 }
 
@@ -1267,25 +1243,6 @@ void Group_member_info_manager::update_member_weight(const std::string &uuid,
   mysql_mutex_unlock(&update_lock);
 }
 
-void Group_member_info_manager::update_primary_member_flag(
-    bool in_primary_mode) {
-  mysql_mutex_lock(&update_lock);
-  for (std::pair<const string, Group_member_info *> &member_info : *members) {
-    member_info.second->set_primary_mode_flag(in_primary_mode);
-  }
-  mysql_mutex_unlock(&update_lock);
-}
-
-void Group_member_info_manager::update_enforce_everywhere_checks_flag(
-    bool enforce_everywhere) {
-  mysql_mutex_lock(&update_lock);
-  for (std::pair<const string, Group_member_info *> &member_info : *members) {
-    member_info.second->set_enforces_update_everywhere_checks_flag(
-        enforce_everywhere);
-  }
-  mysql_mutex_unlock(&update_lock);
-}
-
 void Group_member_info_manager::clear_members() {
   map<string, Group_member_info *>::iterator it = members->begin();
   while (it != members->end()) {
@@ -1297,22 +1254,6 @@ void Group_member_info_manager::clear_members() {
     delete (*it).second;
     members->erase(it++);
   }
-}
-
-bool Group_member_info_manager::is_conflict_detection_enabled() {
-  bool conflict_detection = false;
-
-  mysql_mutex_lock(&update_lock);
-  map<string, Group_member_info *>::iterator it = members->begin();
-  while (it != members->end()) {
-    if ((*it).second != local_member_info) {
-      conflict_detection |= (*it).second->is_conflict_detection_enabled();
-    }
-    ++it;
-  }
-  mysql_mutex_unlock(&update_lock);
-
-  return conflict_detection;
 }
 
 void Group_member_info_manager::encode(vector<uchar> *to_encode) {
@@ -1338,12 +1279,6 @@ Group_member_info_list *Group_member_info_manager::decode(
 bool Group_member_info_manager::get_primary_member_uuid(
     std::string &primary_member_uuid) {
   mysql_mutex_lock(&update_lock);
-
-  if (!local_member_info->in_primary_mode()) {
-    mysql_mutex_unlock(&update_lock); /* purecov: inspected */
-    primary_member_uuid.assign("");   /* purecov: inspected */
-    return false;                     /* purecov: inspected */
-  }
 
   map<string, Group_member_info *>::iterator it;
   for (it = members->begin(); it != members->end(); it++) {
@@ -1371,7 +1306,6 @@ bool Group_member_info_manager::get_primary_member_info(
   for (it = members->begin(); it != members->end(); it++) {
     Group_member_info *info = (*it).second;
     if (info->get_role() == Group_member_info::MEMBER_ROLE_PRIMARY) {
-      assert(info->in_primary_mode());
       member_info_arg.update(*info);
       return false;
     }
@@ -1551,6 +1485,11 @@ void Group_member_info_manager_message::decode_payload(
     members->push_back(member);
     slider += payload_item_length;
   }
+}
+
+int Group_member_info::in_single_primary_election_mode() {
+  MUTEX_LOCK(lock, &update_lock);
+  return single_primary_election_mode;
 }
 
 void Group_member_info_manager_message::

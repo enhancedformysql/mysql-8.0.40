@@ -164,8 +164,6 @@ include/assert.inc [Verify replica_monitor thread is running]
 # 15. Cleanup
 
 DROP TABLE t1;
-RESET PERSIST IF EXISTS group_replication_enforce_update_everywhere_checks;
-RESET PERSIST IF EXISTS group_replication_single_primary_mode;
 RESET PERSIST IF EXISTS group_replication_group_name;
 RESET PERSIST IF EXISTS group_replication_local_address;
 RESET PERSIST IF EXISTS group_replication_group_seeds;

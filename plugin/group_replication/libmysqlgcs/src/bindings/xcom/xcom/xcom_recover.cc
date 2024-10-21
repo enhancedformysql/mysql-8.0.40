@@ -42,7 +42,6 @@
 #include "xcom/site_struct.h"
 #include "xcom/synode_no.h"
 #include "xcom/task.h"
-#include "xcom/task_debug.h"
 #include "xcom/xcom_base.h"
 #include "xcom/xcom_common.h"
 #include "xcom/xcom_detector.h"

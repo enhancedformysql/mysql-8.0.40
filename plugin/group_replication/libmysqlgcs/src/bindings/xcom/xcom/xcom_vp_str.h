@@ -23,8 +23,6 @@
 
 #ifndef E_T_S
 #define E_T_S
-extern const char *delivery_status_to_str(delivery_status x);
-extern const char *cons_type_to_str(cons_type x);
 extern const char *cargo_type_to_str(cargo_type x);
 extern const char *recover_action_to_str(recover_action x);
 extern const char *pax_op_to_str(pax_op x);

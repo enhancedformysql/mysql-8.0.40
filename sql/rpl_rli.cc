@@ -207,8 +207,8 @@ Relay_log_info::Relay_log_info(bool is_slave_recovery,
       PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_log,
       key_RELAYLOG_LOCK_log_end_pos, key_RELAYLOG_LOCK_sync,
       PSI_NOT_INSTRUMENTED, key_RELAYLOG_LOCK_xids, PSI_NOT_INSTRUMENTED,
-      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED,
-      key_RELAYLOG_update_cond, PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED,
+      PSI_NOT_INSTRUMENTED, PSI_NOT_INSTRUMENTED,
+      key_RELAYLOG_update_cond, PSI_NOT_INSTRUMENTED,
       key_file_relaylog, key_file_relaylog_index, key_file_relaylog_cache,
       key_file_relaylog_index_cache);
 #endif
@@ -268,8 +268,7 @@ void Relay_log_info::init_workers(ulong n_workers) {
     Parallel slave parameters initialization is done regardless
     whether the feature is or going to be active or not.
   */
-  mts_groups_assigned = mts_events_assigned = pending_jobs = wq_size_waits_cnt =
-      0;
+  mts_groups_assigned = mts_events_assigned = wq_size_waits_cnt = 0;
   mts_wq_excess_cnt = mts_wq_no_underrun_cnt = mts_wq_overfill_cnt = 0;
   mts_total_wait_overlap = 0;
   mts_total_wait_worker_avail = 0;
@@ -397,11 +396,6 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
       during the first post-rotation time scheduling.
     */
     if (shift == 0) w->master_log_change_notified = false;
-
-    DBUG_PRINT("mta", ("reset_notified_checkpoint shift --> %lu, "
-                       "worker->bitmap_shifted --> %lu, worker --> %u.",
-                       shift, w->bitmap_shifted,
-                       static_cast<unsigned>(it - workers.begin())));
   }
   /*
     There should not be a call where (shift == 0 && rli_checkpoint_seqno != 0).
@@ -410,11 +404,6 @@ void Relay_log_info::reset_notified_checkpoint(ulong shift, time_t new_ts,
   */
   assert(current_mts_submode->get_type() != MTS_PARALLEL_TYPE_DB_NAME ||
          !(shift == 0 && rli_checkpoint_seqno != 0));
-  rli_checkpoint_seqno = rli_checkpoint_seqno - shift;
-  DBUG_PRINT("mta", ("reset_notified_checkpoint shift --> %lu, "
-                     "rli_checkpoint_seqno --> %u.",
-                     shift, rli_checkpoint_seqno));
-
   if (update_timestamp) {
     mysql_mutex_lock(&data_lock);
     last_master_timestamp = new_ts;
@@ -2426,15 +2415,19 @@ int Relay_log_info::set_rli_description_event(
     }
   }
   if (rli_description_event &&
-      --rli_description_event->atomic_usage_counter == 0)
+      --rli_description_event->atomic_usage_counter == 0) {
     delete rli_description_event;
+  }
 #ifndef NDEBUG
-  else
+  else {
     /* It must be MTS mode when the usage counter greater than 1. */
     assert(!rli_description_event || is_parallel_exec());
+  }
 #endif
   rli_description_event = fe;
-  if (rli_description_event) ++rli_description_event->atomic_usage_counter;
+  if (rli_description_event) {
+    ++rli_description_event->atomic_usage_counter;
+  }
 
   return 0;
 }
@@ -3033,8 +3026,9 @@ Relay_log_info::check_privilege_checks_user(
   DBUG_TRACE;
 
   if (param_privilege_checks_username == nullptr) {
-    if (param_privilege_checks_hostname != nullptr)
+    if (param_privilege_checks_hostname != nullptr) {
       return enum_priv_checks_status::USERNAME_NULL_HOSTNAME_NOT_NULL;
+    }
     return enum_priv_checks_status::SUCCESS;
   }
 
@@ -3057,7 +3051,9 @@ Relay_log_info::check_privilege_checks_user(
 
   enum_priv_checks_status error = this->check_applier_acl_user(
       param_privilege_checks_username, param_privilege_checks_hostname);
-  if (!!error) return error;
+  if (!!error) {
+    return error;
+  }
 
   return enum_priv_checks_status::SUCCESS;
 }
@@ -3259,8 +3255,9 @@ Relay_log_info::initialize_security_context(THD *thd) {
     if (!has_grant) {
       return enum_priv_checks_status::USER_DOES_NOT_HAVE_PRIVILEGES;
     }
-  } else
+  } else {
     thd->security_context()->skip_grants();
+  }
 
   return enum_priv_checks_status::SUCCESS;
 }

@@ -30,10 +30,8 @@
 
 Primary_election_action::Primary_election_action()
     : Primary_election_action(std::string(""), 0) {
-  if (local_member_info && local_member_info->in_primary_mode()) {
+  if (local_member_info) {
     action_execution_mode = PRIMARY_ELECTION_ACTION_PRIMARY_SWITCH;
-  } else {
-    action_execution_mode = PRIMARY_ELECTION_ACTION_MODE_SWITCH;
   }
 }
 
@@ -60,10 +58,8 @@ Primary_election_action::Primary_election_action(
                    &notification_lock, MY_MUTEX_INIT_FAST);
   mysql_cond_init(key_GR_COND_primary_election_action_notification,
                   &notification_cond);
-  if (local_member_info && local_member_info->in_primary_mode()) {
+  if (local_member_info) {
     action_execution_mode = PRIMARY_ELECTION_ACTION_PRIMARY_SWITCH;
-  } else {
-    action_execution_mode = PRIMARY_ELECTION_ACTION_MODE_SWITCH;
   }
 }
 
@@ -287,9 +283,6 @@ Primary_election_action::execute_action(
   change_action_phase(PRIMARY_SAFETY_CHECK_PHASE);
 
   if (PRIMARY_ELECTION_ACTION_PRIMARY_SWITCH == action_execution_mode) {
-    set_enforce_update_everywhere_checks(true);
-    group_member_mgr->update_enforce_everywhere_checks_flag(true);
-
     if (is_primary) {
       stage_handler->set_stage(
           info_GR_STAGE_primary_switch_pending_transactions.m_key, __FILE__,
@@ -354,7 +347,6 @@ Primary_election_action::execute_action(
   }
 
   if (!single_election_action_aborted) {
-    set_single_primary_mode_var(true);
     mode_is_set =
         (PRIMARY_ELECTION_ACTION_MODE_SWITCH == action_execution_mode);
   }
@@ -383,19 +375,6 @@ Primary_election_action::execute_action(
   }
 
 end:
-
-  /* Even if the action was cancelled, if it already is in primary mode or if
-     it was a primary switch reset it the flags anyway */
-  if ((!single_election_action_aborted || mode_is_set) ||
-      PRIMARY_ELECTION_ACTION_PRIMARY_SWITCH == action_execution_mode) {
-    set_enforce_update_everywhere_checks(false);
-    group_member_mgr->update_enforce_everywhere_checks_flag(false);
-  }
-
-  if (single_election_action_aborted && !mode_is_set &&
-      PRIMARY_ELECTION_ACTION_MODE_SWITCH == action_execution_mode) {
-    group_member_mgr->update_primary_member_flag(false);
-  }
 
   group_events_observation_manager->unregister_group_event_observer(this);
   /**

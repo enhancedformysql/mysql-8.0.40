@@ -28,7 +28,6 @@
 
 bit_set *clone_bit_set(bit_set *orig);
 bit_set *new_bit_set(uint32_t bits);
-void bit_set_or(bit_set *x, bit_set const *y);
 void bit_set_xor(bit_set *x, bit_set const *y);
 char *dbg_bitset(bit_set const *p, u_int nodes);
 void free_bit_set(bit_set *bs);

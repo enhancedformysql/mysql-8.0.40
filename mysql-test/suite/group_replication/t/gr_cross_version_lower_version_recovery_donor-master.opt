@@ -1,1 +1,0 @@
---log-error=$MYSQLTEST_VARDIR/tmp/gr_cross_version_lower_version_recovery_donor.1.err

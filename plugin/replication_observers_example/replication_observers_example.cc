@@ -232,86 +232,10 @@ typedef enum enum_before_commit_test_cases {
   INVALID_CERTIFICATION_OUTCOME
 } before_commit_test_cases;
 
-#ifndef NDEBUG
-static int before_commit_tests(Trans_param *param,
-                               before_commit_test_cases test_case) {
-  rpl_sid fake_sid;
-  rpl_sidno fake_sidno;
-  rpl_gno fake_gno;
-
-  Transaction_termination_ctx transaction_termination_ctx;
-  memset(&transaction_termination_ctx, 0, sizeof(transaction_termination_ctx));
-  transaction_termination_ctx.m_thread_id = param->thread_id;
-
-  switch (test_case) {
-    case NEGATIVE_CERTIFICATION:
-      transaction_termination_ctx.m_rollback_transaction = true;
-      transaction_termination_ctx.m_generated_gtid = false;
-      transaction_termination_ctx.m_sidno = -1;
-      transaction_termination_ctx.m_gno = -1;
-      break;
-
-    case POSITIVE_CERTIFICATION_WITH_GTID:
-      fake_sid.parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
-                     binary_log::Uuid::TEXT_LENGTH);
-      fake_sidno = get_sidno_from_global_sid_map(fake_sid);
-      fake_gno = get_last_executed_gno(fake_sidno);
-      fake_gno++;
-
-      transaction_termination_ctx.m_rollback_transaction = false;
-      transaction_termination_ctx.m_generated_gtid = true;
-      transaction_termination_ctx.m_sidno = fake_sidno;
-      transaction_termination_ctx.m_gno = fake_gno;
-      break;
-
-    case POSITIVE_CERTIFICATION_WITHOUT_GTID:
-      transaction_termination_ctx.m_rollback_transaction = false;
-      transaction_termination_ctx.m_generated_gtid = false;
-      transaction_termination_ctx.m_sidno = 0;
-      transaction_termination_ctx.m_gno = 0;
-      break;
-
-    case INVALID_CERTIFICATION_OUTCOME:
-      transaction_termination_ctx.m_rollback_transaction = true;
-      transaction_termination_ctx.m_generated_gtid = true;
-      transaction_termination_ctx.m_sidno = -1;
-      transaction_termination_ctx.m_gno = -1;
-
-    default:
-      break;
-  }
-
-  if (set_transaction_ctx(transaction_termination_ctx)) {
-    LogPluginErrMsg(
-        ERROR_LEVEL, ER_LOG_PRINTF_MSG,
-        "Unable to update transaction context service on server, thread_id: %u",
-        param->thread_id);
-    return 1;
-  }
-
-  return 0;
-}
-#endif
-
 static int trans_before_commit(Trans_param *param [[maybe_unused]]) {
   trans_before_commit_call++;
 
   DBUG_EXECUTE_IF("force_error_on_before_commit_listener", return 1;);
-
-  DBUG_EXECUTE_IF("force_negative_certification_outcome",
-                  return before_commit_tests(param, NEGATIVE_CERTIFICATION););
-
-  DBUG_EXECUTE_IF(
-      "force_positive_certification_outcome_without_gtid",
-      return before_commit_tests(param, POSITIVE_CERTIFICATION_WITHOUT_GTID););
-
-  DBUG_EXECUTE_IF(
-      "force_positive_certification_outcome_with_gtid",
-      return before_commit_tests(param, POSITIVE_CERTIFICATION_WITH_GTID););
-
-  DBUG_EXECUTE_IF(
-      "force_invalid_certification_outcome",
-      return before_commit_tests(param, INVALID_CERTIFICATION_OUTCOME););
 
   return 0;
 }
@@ -723,7 +647,7 @@ int test_channel_service_interface() {
 
   // Check that a queue in an empty channel will fail.
   char empty_event[] = "";
-  error = channel_queue_packet(dummy_channel, empty_event, 0);
+  error = channel_queue_packet(dummy_channel, empty_event, 0, false);
   assert(error);
 
   // Test a multi thread channel

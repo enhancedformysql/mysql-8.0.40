@@ -98,11 +98,8 @@ static inline linkage *link_out(linkage *self); /* Remove link from list */
 
 #define TYPE_HASH(x) 0
 
-/* purecov: begin deadcode */
 static inline linkage *link_first(linkage *self) { return self->suc; }
-
 static inline linkage *link_last(linkage *self) { return self->pred; }
-/* purecov: end */
 static inline linkage *link_extract_first(linkage *self) {
   return link_out(self->suc);
 }
@@ -135,7 +132,6 @@ static inline linkage *link_out(linkage *self) {
 }
 
 static inline void link_follow(linkage *self, linkage *ptr) {
-  /* XDBG("%s ",__func__); */
   link_out(self);
   if (ptr) {
     TYPE_SANITY_CHECK(self, ptr);
@@ -148,7 +144,6 @@ static inline void link_follow(linkage *self, linkage *ptr) {
 }
 
 static inline void link_precede(linkage *self, linkage *ptr) {
-  /* XDBG("%s ",__func__); */
   link_out(self);
   if (ptr) {
     TYPE_SANITY_CHECK(self, ptr);
@@ -159,13 +154,5 @@ static inline void link_precede(linkage *self, linkage *ptr) {
     LINK_SANITY_CHECK(self);
   }
 }
-
-/* purecov: begin deadcode */
-static inline int cardinal(linkage *self) {
-  int n = 0;
-  FWD_ITER(self, linkage, n++);
-  return n;
-}
-/* purecov: end */
 
 #endif

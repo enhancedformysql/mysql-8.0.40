@@ -1,2 +1,0 @@
---let $set_gtid_next= aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa:1
---source ../include/gr_consistent_reads_after.inc

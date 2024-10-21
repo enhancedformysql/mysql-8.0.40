@@ -126,11 +126,14 @@ int Applier_handler::handle_event(Pipeline_event *event, Continuation *cont) {
     performed on the previous handler.
   */
   if (event->get_event_type() != binary_log::TRANSACTION_CONTEXT_EVENT) {
-    error = channel_interface.queue_packet((const char *)p->payload, p->len);
+    error = channel_interface.queue_packet((const char *)p->payload, p->len,
+                                           event->get_io_buffered());
 
     if (event->get_event_type() == binary_log::GTID_LOG_EVENT) {
-      applier_module->get_pipeline_stats_member_collector()
-          ->increment_transactions_waiting_apply();
+      if (!event->is_view_generated()) {
+        applier_module->get_pipeline_stats_member_collector()
+            ->increment_transactions_waiting_apply();
+      }
     }
   }
 

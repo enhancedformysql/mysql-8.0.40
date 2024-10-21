@@ -6367,9 +6367,9 @@ static Sys_var_uint Sys_replica_checkpoint_period(
     "specifies the maximum number of milliseconds between updates.",
     GLOBAL_VAR(opt_mta_checkpoint_period), CMD_LINE(REQUIRED_ARG),
 #ifndef NDEBUG
-    VALID_RANGE(0, UINT_MAX), DEFAULT(300), BLOCK_SIZE(1));
+    VALID_RANGE(0, UINT_MAX), DEFAULT(100), BLOCK_SIZE(1));
 #else
-    VALID_RANGE(1, UINT_MAX), DEFAULT(300), BLOCK_SIZE(1));
+    VALID_RANGE(1, UINT_MAX), DEFAULT(100), BLOCK_SIZE(1));
 #endif /* NDEBUG */
 
 static Sys_var_deprecated_alias Sys_slave_checkpoint_period(
@@ -6382,9 +6382,9 @@ static Sys_var_uint Sys_replica_checkpoint_group(
     "the maximum number of committed transactions between updates.",
     GLOBAL_VAR(opt_mta_checkpoint_group), CMD_LINE(REQUIRED_ARG),
 #ifndef NDEBUG
-    VALID_RANGE(1, MTS_MAX_BITS_IN_GROUP), DEFAULT(512), BLOCK_SIZE(1));
+    VALID_RANGE(1, MTS_MAX_BITS_IN_GROUP), DEFAULT(8192), BLOCK_SIZE(1));
 #else
-    VALID_RANGE(32, MTS_MAX_BITS_IN_GROUP), DEFAULT(512), BLOCK_SIZE(8));
+    VALID_RANGE(32, MTS_MAX_BITS_IN_GROUP), DEFAULT(8192), BLOCK_SIZE(8));
 #endif /* NDEBUG */
 
 static Sys_var_deprecated_alias Sys_slave_checkpoint_group(
@@ -6438,20 +6438,17 @@ static Sys_var_ulong Sys_replica_parallel_workers(
     NOT_IN_BINLOG, ON_CHECK(nullptr),
     ON_UPDATE(replica_parallel_workers_update));
 
+static Sys_var_ulong Sys_replica_worker_queue_len_max(
+    "replica_worker_queue_len_max",
+    "Max length of one MTS Worker queue ",
+    PERSIST_AS_READONLY GLOBAL_VAR(opt_mts_replica_worker_queue_len_max),
+    CMD_LINE(REQUIRED_ARG, OPT_REPLICA_PARALLEL_WORKERS),
+    VALID_RANGE(16384, 2097152), DEFAULT(65536), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(nullptr),
+    ON_UPDATE(nullptr));
+
 static Sys_var_deprecated_alias Sys_slave_parallel_workers(
     "slave_parallel_workers", Sys_replica_parallel_workers);
-
-static Sys_var_ulonglong Sys_replica_pending_jobs_size_max(
-    "replica_pending_jobs_size_max",
-    "Soft limit on the size, in bytes, of per-worker queues of events that "
-    "have not yet been applied. The queue size may exceed this limit in case "
-    "a single event is bigger than the limit.",
-    GLOBAL_VAR(opt_mts_pending_jobs_size_max), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1024, (ulonglong) ~(intptr)0), DEFAULT(128 * 1024 * 1024),
-    BLOCK_SIZE(1024), ON_CHECK(nullptr));
-
-static Sys_var_deprecated_alias Sys_slave_pending_jobs_size_max(
-    "slave_pending_jobs_size_max", Sys_replica_pending_jobs_size_max);
 
 static bool check_locale(sys_var *self, THD *thd, set_var *var) {
   if (!var->value) return false;
@@ -7342,13 +7339,12 @@ static bool check_group_replication_consistency(sys_var *self, THD *thd,
 }
 
 static const char *group_replication_consistency_names[] = {
-    "EVENTUAL", "BEFORE_ON_PRIMARY_FAILOVER", "BEFORE",
-    "AFTER",    "BEFORE_AND_AFTER",           NullS};
+    "EVENTUAL", "BEFORE_ON_PRIMARY_FAILOVER", "BEFORE", NullS};
 
 static Sys_var_enum Sys_group_replication_consistency(
     "group_replication_consistency",
     "Transaction consistency guarantee, possible values: EVENTUAL, "
-    "BEFORE_ON_PRIMARY_FAILOVER, BEFORE, AFTER, BEFORE_AND_AFTER",
+    "BEFORE_ON_PRIMARY_FAILOVER, BEFORE",
     SESSION_VAR(group_replication_consistency), CMD_LINE(OPT_ARG),
     group_replication_consistency_names,
     DEFAULT(GROUP_REPLICATION_CONSISTENCY_EVENTUAL), NO_MUTEX_GUARD,

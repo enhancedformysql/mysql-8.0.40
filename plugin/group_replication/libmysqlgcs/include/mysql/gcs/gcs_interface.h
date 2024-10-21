@@ -31,7 +31,6 @@
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_group_identifier.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_group_management_interface.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_logging.h"
-#include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_statistics_interface.h"
 
 /**
  * @brief Runtime external resources that should be provided to an instance of
@@ -174,19 +173,6 @@ class Gcs_interface {
       const Gcs_group_identifier &group_identifier) = 0;
 
   /**
-    Method that retrieves the binding implementation of the Statistics
-    interface.
-
-    @param[in] group_identifier the group in which this implementation pertains
-
-    @return A valid reference to a gcs_statistics_interface implementation.
-            NULL, in case of error.
-  */
-
-  virtual Gcs_statistics_interface *get_statistics(
-      const Gcs_group_identifier &group_identifier) = 0;
-
-  /**
     Method that retrieves the binding implementation of the Group
     Management Session interface.
 
@@ -226,6 +212,8 @@ class Gcs_interface {
    */
   virtual enum_gcs_error cleanup_runtime_resources(
       Gcs_interface_runtime_requirements &reqs) = 0;
+
+  virtual void update_xcom_cache_mode(int new_mode) = 0;
 
   virtual ~Gcs_interface() = default;
 };

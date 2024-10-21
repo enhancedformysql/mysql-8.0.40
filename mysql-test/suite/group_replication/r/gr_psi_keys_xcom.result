@@ -33,9 +33,7 @@ wait/synch/mutex/group_rpl/key_GR_LOCK_group_action_coordinator_thread_end	YES	Y
 wait/synch/mutex/group_rpl/LOCK_group_info_manager	YES	YES	singleton	NULL	0	NULL
 wait/synch/mutex/group_rpl/key_GR_LOCK_group_part_handler_abort	YES	YES	singleton	NULL	0	NULL
 wait/synch/mutex/group_rpl/key_GR_LOCK_group_part_handler_run	YES	YES	singleton	NULL	0	NULL
-wait/synch/mutex/group_rpl/LOCK_multi_primary_action_notification	YES	YES	singleton	NULL	0	NULL
 wait/synch/mutex/group_rpl/LOCK_pipeline_continuation	YES	YES	singleton	NULL	0	NULL
-wait/synch/mutex/group_rpl/LOCK_pipeline_stats_flow_control	YES	YES	singleton	NULL	0	NULL
 wait/synch/mutex/group_rpl/LOCK_pipeline_stats_transactions_waiting_apply	YES	YES	singleton	NULL	0	NULL
 wait/synch/mutex/group_rpl/LOCK_plugin_modules_termination	YES	YES	singleton	NULL	0	NULL
 wait/synch/mutex/group_rpl/LOCK_plugin_applier_module_initialize_terminate	YES	YES	singleton	NULL	0	NULL
@@ -79,10 +77,7 @@ wait/synch/rwlock/group_rpl/RWLOCK_io_cache_unused_list	YES	YES	singleton	NULL	0
 wait/synch/rwlock/group_rpl/RWLOCK_plugin_running	YES	YES	singleton	NULL	0	NULL
 wait/synch/rwlock/group_rpl/RWLOCK_plugin_stop	YES	YES	singleton	NULL	0	NULL
 wait/synch/rwlock/group_rpl/RWLOCK_transaction_observation_list	YES	YES	singleton	NULL	0	NULL
-wait/synch/rwlock/group_rpl/RWLOCK_transaction_consistency_manager_map	YES	YES	singleton	NULL	0	NULL
-wait/synch/rwlock/group_rpl/RWLOCK_transaction_consistency_manager_prepared_transactions_on_my_applier	YES	YES	singleton	NULL	0	NULL
-wait/synch/rwlock/group_rpl/RWLOCK_flow_control_module_info	YES	YES	singleton	NULL	0	NULL
-wait/synch/rwlock/group_rpl/RWLOCK_transaction_consistency_info_members_that_must_prepare_the_transaction	YES	YES	singleton	NULL	0	NULL
+wait/synch/rwlock/group_rpl/RWLOCK_flow_stat_module_info	YES	YES	singleton	NULL	0	NULL
 wait/synch/cond/group_rpl/COND_applier_module_run	YES	YES	singleton	NULL	0	NULL
 wait/synch/cond/group_rpl/COND_applier_module_suspend	YES	YES	singleton	NULL	0	NULL
 wait/synch/cond/group_rpl/COND_applier_module_wait	YES	YES	singleton	NULL	0	NULL
@@ -124,10 +119,6 @@ wait/synch/cond/group_rpl/COND_mysql_thread_handler_dispatcher_run	YES	YES	singl
 wait/synch/cond/group_rpl/COND_mysql_thread_handler_read_only_mode_run	YES	YES	singleton	NULL	0	NULL
 wait/synch/cond/group_rpl/COND_mysql_thread_handler_read_only_mode_dispatcher_run	YES	YES	singleton	NULL	0	NULL
 stage/group_rpl/Undergoing auto-rejoin procedure	YES	YES	progress	NULL	0	NULL
-stage/group_rpl/Multi-primary Switch: waiting for pending transactions to finish	YES	YES	progress	NULL	0	NULL
-stage/group_rpl/Multi-primary Switch: waiting on another member step completion	YES	YES	progress	NULL	0	NULL
-stage/group_rpl/Multi-primary Switch: applying buffered transactions	YES	YES	progress	NULL	0	NULL
-stage/group_rpl/Multi-primary Switch: waiting for operation to complete on all members	YES	YES	progress	NULL	0	NULL
 stage/group_rpl/Primary Election: applying buffered transactions	YES	YES	progress	NULL	0	NULL
 stage/group_rpl/Primary Election: waiting on current primary transaction execution	YES	YES	progress	NULL	0	NULL
 stage/group_rpl/Primary Election: waiting for members to enable super_read_only	YES	YES	progress	NULL	0	NULL

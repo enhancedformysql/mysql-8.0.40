@@ -28,7 +28,6 @@
 --source include/have_group_replication_plugin.inc
 --let $rpl_server_count= 3
 --let $rpl_skip_group_replication_start= 1
---let $rpl_group_replication_single_primary_mode=1
 --source include/group_replication.inc
 
 # Validate plugins
@@ -78,10 +77,6 @@ INSERT INTO t1 VALUES (2);
 --let $_group_replication_local_address2= `SELECT @@GLOBAL.group_replication_local_address`
 --let $_group_replication_group_seeds2= `SELECT @@GLOBAL.group_replication_group_seeds`
 --let $_group_replication_comm_stack= `SELECT @@GLOBAL.group_replication_communication_stack`
-
-# Persist the primary mode settings so mysqld_safe starts with them
-SET PERSIST group_replication_enforce_update_everywhere_checks= OFF;
-SET PERSIST group_replication_single_primary_mode= ON;
 
 --let $plugin_list= $GROUP_REPLICATION
 --source include/spawn_monitoring_process.inc
@@ -197,8 +192,6 @@ SET DEBUG_SYNC = 'RESET';
 
 --eval SET GLOBAL group_replication_clone_threshold= $_group_replication_threshold_save
 
-RESET PERSIST IF EXISTS group_replication_enforce_update_everywhere_checks;
-RESET PERSIST IF EXISTS group_replication_single_primary_mode;
 RESET PERSIST IF EXISTS group_replication_group_name;
 RESET PERSIST IF EXISTS group_replication_local_address;
 RESET PERSIST IF EXISTS group_replication_group_seeds;

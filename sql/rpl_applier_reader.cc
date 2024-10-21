@@ -256,6 +256,9 @@ Log_event *Rpl_applier_reader::read_next_event() {
         }
       }
     }
+
+    /* Wait for replay complete */
+    wait_for_replay_complete();
     if (!move_to_next_log(force_purging)) return read_next_event();
   }
 
@@ -294,6 +297,40 @@ Rotate_log_event *Rpl_applier_reader::generate_rotate_event() {
   }
   ev->server_id = 0;  // don't be ignored by slave SQL thread
   return ev;
+}
+
+void Rpl_applier_reader::wait_for_replay_complete() {
+  mysql_mutex_assert_owner(&m_rli->data_lock);
+  mysql_mutex_unlock(&m_rli->data_lock);
+
+  bool need_wait_worker;
+  do {
+    need_wait_worker = false;
+    if (!m_rli->workers.empty()) {
+      for (int i = static_cast<int>(m_rli->workers.size()) - 1; i >= 0; i--) {
+        Slave_worker *w = m_rli->workers[i];
+        mysql_mutex_lock(&w->jobs_lock);
+
+        if (w->running_status != Slave_worker::RUNNING) {
+          mysql_mutex_unlock(&w->jobs_lock);
+          continue;
+        }
+
+        if (w->is_wait_last_commited) {
+          need_wait_worker = true;
+          mysql_mutex_unlock(&w->jobs_lock);
+          break;
+        }
+        mysql_mutex_unlock(&w->jobs_lock);
+      }
+    }
+
+    if (need_wait_worker) {
+      my_sleep(1000);
+    }
+  } while(need_wait_worker && (!m_rli->abort_slave));
+
+  mysql_mutex_lock(&m_rli->data_lock);
 }
 
 bool Rpl_applier_reader::wait_for_new_event() {

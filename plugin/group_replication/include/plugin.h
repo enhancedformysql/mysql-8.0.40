@@ -53,6 +53,8 @@
 #include "plugin/group_replication/include/services/server_services_references.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_interface.h"
 
+#define DBUG_ASSERT(a) assert(a)
+
 // Forward declarations
 class Autorejoin_thread;
 class Transaction_consistency_manager;
@@ -86,6 +88,12 @@ enum enum_exit_state_action {
   EXIT_STATE_ACTION_READ_ONLY = 0,
   EXIT_STATE_ACTION_ABORT_SERVER,
   EXIT_STATE_ACTION_OFFLINE_MODE
+};
+
+enum Primary_election_mode {
+  PEM_WEIGHT_ONLY = 0,
+  PEM_GTID_FIRST,
+  PEM_WEIGHT_FIRST
 };
 
 /**
@@ -184,7 +192,6 @@ extern Compatibility_module *compatibility_mgr;
 extern Group_partition_handling *group_partition_handler;
 extern Blocked_transaction_handler *blocked_transaction_handler;
 extern Remote_clone_handler *remote_clone_handler;
-extern Consensus_leaders_handler *consensus_leaders_handler;
 // Latch used as the control point of the event driven
 // management of the transactions.
 extern Wait_ticket<my_thread_id> *transactions_latch;
@@ -206,8 +213,6 @@ bool get_allow_local_lower_version_join();
 ulong get_transaction_size_limit();
 bool is_plugin_waiting_to_set_server_read_mode();
 bool check_async_channel_running_on_secondary();
-void set_enforce_update_everywhere_checks(bool option);
-void set_single_primary_mode_var(bool option);
 void set_auto_increment_handler_values();
 void reset_auto_increment_handler_values(bool force_reset = false);
 SERVICE_TYPE(registry) * get_plugin_registry();
@@ -217,7 +222,7 @@ bool is_autorejoin_enabled();
 uint get_number_of_autorejoin_tries();
 ulonglong get_rejoin_timeout();
 void declare_plugin_cloning(bool is_running);
-bool get_allow_single_leader();
+
 /**
   Encapsulates the logic necessary to attempt a rejoin, i.e. gracefully leave
   the group, terminate GCS infrastructure, terminate auto-rejoin relevant plugin
@@ -239,18 +244,10 @@ bool get_plugin_is_setting_read_mode();
 const char *get_group_name_var();
 const char *get_view_change_uuid_var();
 ulong get_exit_state_action_var();
-ulong get_flow_control_mode_var();
-long get_flow_control_certifier_threshold_var();
-long get_flow_control_applier_threshold_var();
-long get_flow_control_min_quota_var();
-long get_flow_control_min_recovery_quota_var();
-long get_flow_control_max_quota_var();
-int get_flow_control_member_quota_percent_var();
-int get_flow_control_period_var();
-int get_flow_control_hold_percent_var();
-int get_flow_control_release_percent_var();
 ulong get_components_stop_timeout_var();
 ulong get_communication_stack_var();
+ulong get_single_primary_election_mode_var();
+const char *get_single_primary_election_mode_string(int index);
 
 // Plugin public methods
 int plugin_group_replication_init(MYSQL_PLUGIN plugin_info);
@@ -274,6 +271,7 @@ bool plugin_get_group_member_stats(
     const GROUP_REPLICATION_GROUP_MEMBER_STATS_CALLBACKS &callbacks);
 uint plugin_get_group_members_number();
 int plugin_group_replication_leave_group();
+long get_applier_batch_size_threshold_var();
 
 /**
   Method to set retrieved certification info from a recovery channel extracted

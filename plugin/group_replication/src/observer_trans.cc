@@ -131,11 +131,6 @@ int group_replication_trans_before_dml(Trans_param *param, int &out) {
     /* purecov: end */
   }
 
-  if (local_member_info->has_enforces_update_everywhere_checks() &&
-      (out += (param->trans_ctx_info.tx_isolation == ISO_SERIALIZABLE))) {
-    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_UNSUPPORTED_TRANS_ISOLATION);
-    return 0;
-  }
   /*
     Cycle through all involved tables to assess if they all
     comply with the plugin runtime requirements. For now:
@@ -155,12 +150,7 @@ int group_replication_trans_before_dml(Trans_param *param, int &out) {
                    param->tables_info[table].table_name);
       out++;
     }
-    if (local_member_info->has_enforces_update_everywhere_checks() &&
-        param->tables_info[table].has_cascade_foreign_key) {
-      LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_FK_WITH_CASCADE_UNSUPPORTED,
-                   param->tables_info[table].table_name);
-      out++;
-    }
+
   }
 
   return 0;
@@ -219,14 +209,6 @@ int group_replication_trans_before_commit(Trans_param *param) {
             ->increment_transactions_applied_during_recovery();
       }
       shared_plugin_stop_lock->release_read_lock();
-
-      if ((Group_member_info::MEMBER_ONLINE == member_status ||
-           Group_member_info::MEMBER_IN_RECOVERY == member_status) &&
-          transaction_consistency_manager->after_applier_prepare(
-              param->gtid_info.sidno, param->gtid_info.gno, param->thread_id,
-              member_status)) {
-        return 1; /* purecov: inspected */
-      }
     }
 
     return 0;
@@ -295,10 +277,6 @@ int group_replication_trans_before_commit(Trans_param *param) {
   Gtid_log_event *gle = nullptr;
 
   Transaction_context_log_event *tcle = nullptr;
-
-  const enum_group_replication_consistency_level consistency_level =
-      static_cast<enum_group_replication_consistency_level>(
-          param->group_replication_consistency);
 
   Transaction_message_interface *transaction_msg = nullptr;
   enum enum_gcs_error send_error = GCS_OK;
@@ -483,12 +461,7 @@ int group_replication_trans_before_commit(Trans_param *param) {
       the local member, we broadcast the transaction as a normal
       transaction that all versions do understand.
     */
-    if (consistency_level < GROUP_REPLICATION_CONSISTENCY_AFTER) {
-      transaction_msg = new Transaction_message(transaction_size);
-    } else {
-      transaction_msg = new Transaction_with_guarantee_message(
-          transaction_size, consistency_level);
-    }
+    transaction_msg = new Transaction_message(transaction_size);
 
     if (binary_event_serialize(tcle, transaction_msg) ||
         binary_event_serialize(gle, transaction_msg)) {
@@ -539,12 +512,6 @@ int group_replication_trans_before_commit(Trans_param *param) {
   });
 #endif
 
-  /*
-    Check if member needs to throttle its transactions to avoid
-    cause starvation on the group.
-  */
-  applier_module->get_flow_control_module()->do_wait();
-
   // Broadcast the Transaction Message
   send_error = gcs_module->send_transaction_message(*transaction_msg);
 
@@ -573,7 +540,7 @@ int group_replication_trans_before_commit(Trans_param *param) {
   if (transactions_latch->waitTicket(param->thread_id)) {
     /* purecov: begin inspected */
     LogPluginErr(ERROR_LEVEL,
-                 ER_GRP_RPL_ERROR_WHILE_WAITING_FOR_CONFLICT_DETECTION,
+                 ER_GRP_RPL_ERROR_WHILE_WAITING_FOR_PAXOS_COMMUNICATION,
                  param->thread_id);
     error = post_wait_error;
     goto err;

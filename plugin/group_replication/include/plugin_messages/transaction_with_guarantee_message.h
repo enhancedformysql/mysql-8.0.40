@@ -90,14 +90,6 @@ class Transaction_with_guarantee_message
   */
   Gcs_message_data *get_message_data_and_reset() override;
 
-  /**
-    Decode transaction consistency without unmarshal transaction data.
-
-    @return the transaction consistency
-  */
-  static enum_group_replication_consistency_level
-  decode_and_get_consistency_level(const unsigned char *buffer, size_t);
-
  protected:
   /*
    Implementation of the template methods

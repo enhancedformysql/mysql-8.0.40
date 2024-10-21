@@ -39,6 +39,8 @@
 int synode_eq(synode_no x, synode_no y);
 int synode_gt(synode_no x, synode_no y);
 int synode_lt(synode_no x, synode_no y);
+int synode_msgno_not_gt(synode_no x, synode_no y);
+int synode_msgno_gt(synode_no x, synode_no y);
 extern "C" synode_no const null_synode;
 void add_synode_event(synode_no const synode);
 

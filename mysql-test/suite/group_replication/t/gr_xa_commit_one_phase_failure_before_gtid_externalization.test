@@ -49,7 +49,6 @@
 --source include/have_debug.inc
 --source include/have_debug_sync.inc
 --source include/have_group_replication_plugin.inc
---let $rpl_group_replication_single_primary_mode =1
 --let $rpl_skip_group_replication_start = 1
 --let $rpl_server_count = 3
 --source include/group_replication.inc
@@ -96,7 +95,7 @@ INSERT INTO t1 VALUES (1);
 
 # 5. Restart server 1 (former primary) and check:
 #
---let $restart_parameters = restart:--group_replication_local_address=$_group_replication_local_address --group_replication_group_seeds=$_group_replication_group_seeds --group_replication_group_name=$_group_replication_group_name --group_replication_start_on_boot=OFF --group_replication_single_primary_mode=TRUE --group_replication_enforce_update_everywhere_checks=FALSE
+--let $restart_parameters = restart:--group_replication_local_address=$_group_replication_local_address --group_replication_group_seeds=$_group_replication_group_seeds --group_replication_group_name=$_group_replication_group_name --group_replication_start_on_boot=OFF
 --replace_result $_group_replication_local_address GROUP_REPLICATION_LOCAL_ADDRESS $_group_replication_group_seeds GROUP_REPLICATION_GROUP_SEEDS $_group_replication_group_name GROUP_REPLICATION_GROUP_NAME
 --source include/start_mysqld.inc
 --let $rpl_server_number = 1
@@ -105,31 +104,25 @@ INSERT INTO t1 VALUES (1);
 --let $rpl_connection_name = server1
 --source include/rpl_connection.inc
 
-# 5.a. Error log for messages stating that recovery process didn't find
-#       any transaction needing recovery.
-#
---let $assert_select = in InnoDB engine. No attempts to commit, rollback or prepare any transactions.
---source extra/xa_crash_safe_tests/assert_recovery_message.inc
-
-# 5.b. The `XA COMMIT ... ONE PHASE` is present in the binary log.
+# 5.a. The `XA COMMIT ... ONE PHASE` is present in the binary log.
 #
 --let $event_sequence = Gtid # $xa_start_end # XA_prepare/XA COMMIT $xid ONE PHASE
 --source include/assert_binlog_events.inc
 
-# 5.c. The GTID_EXECUTED variable was updated.
+# 5.b. The GTID_EXECUTED variable was updated.
 #
 --let $after_gtid_executed = `SELECT @@GLOBAL.gtid_executed`
 --let $assert_text = GTID_EXECUTED has been updated
 --let $assert_cond = "$before_gtid_executed" != "$after_gtid_executed"
 --source include/assert.inc
 
-# 5.d. There aren't any pending XA transaction listed in the output of `XA
+# 5.c. There aren't any pending XA transaction listed in the output of `XA
 #       RECOVER`.
 #
 --let $expected_prepared_xa_count = 0
 --source extra/xa_crash_safe_tests/assert_xa_recover.inc
 
-# 5.e. The table has been updated.
+# 5.d. The table has been updated.
 #
 --let $expected_row_count = 2
 --source extra/xa_crash_safe_tests/assert_row_count.inc

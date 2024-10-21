@@ -30,8 +30,6 @@
 
 #define copy_app_data(target, source)                            \
   {                                                              \
-    IFDBG(D_NONE, FN; STRLIT(" copy_app_data "); PTREXP(target); \
-          PTREXP(*target); PTREXP(source));                      \
     _replace_app_data_list(target, source);                      \
   }
 
@@ -45,11 +43,6 @@ app_data_ptr clone_app_data(app_data_ptr a);
 app_data_ptr clone_app_data_single(app_data_ptr a);
 app_data_ptr new_app_data();
 app_data_ptr init_app_data(app_data_ptr a);
-
-app_data_ptr new_data(u_int n, char *val, cons_type consensus);
-app_data_ptr new_exit();
-app_data_ptr new_nodes(u_int n, node_address *names, cargo_type cargo);
-app_data_ptr new_reset(cargo_type type);
 
 void _replace_app_data_list(app_data_list target, app_data_ptr source);
 char *dbg_app_data(app_data_ptr a);

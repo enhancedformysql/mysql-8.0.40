@@ -34,11 +34,9 @@
 #include "plugin/group_replication/include/udf/udf_write_concurrency.h"
 
 /* The UDFs we will register. */
-static std::array<udf_descriptor, 10> udfs = {
+static std::array<udf_descriptor, 9> udfs = {
     {/* single primary */
      set_as_primary_udf(), switch_to_single_primary_udf(),
-     /* multi primary */
-     switch_to_multi_primary_udf(),
      /* write concurrency */
      get_write_concurrency_udf(), set_write_concurrency_udf(),
      /* group communication protocol */

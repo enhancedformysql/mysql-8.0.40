@@ -103,7 +103,6 @@ int Gcs_mysql_network_provider_native_interface_impl::
   return 0;
 #endif
 }
-/* purecov: begin deadcode */
 bool Gcs_mysql_network_provider_native_interface_impl::set_network_namespace(
     const std::string &network_namespace
 #ifndef HAVE_SETNS
@@ -116,7 +115,6 @@ bool Gcs_mysql_network_provider_native_interface_impl::set_network_namespace(
   return 0;
 #endif
 }
-/* purecov: end */
 
 bool Gcs_mysql_network_provider_native_interface_impl::
     restore_original_network_namespace() {
@@ -277,13 +275,11 @@ std::unique_ptr<Network_connection> Gcs_mysql_network_provider::open_connection(
 
   Replication_thread_api recovery_channel("group_replication_recovery");
 
-  /* purecov: begin deadcode */
   m_native_interface->channel_get_network_namespace(network_namespace);
 
   if (!network_namespace.empty()) {
     m_native_interface->set_network_namespace(network_namespace);
   }
-  /* purecov: end */
 
   if (m_auth_provider->get_credentials(recovery_username, recovery_password)) {
     LogPluginErr(
@@ -327,11 +323,9 @@ std::unique_ptr<Network_connection> Gcs_mysql_network_provider::open_connection(
   }
   retval->has_error = false;
 err:
-  /* purecov: begin deadcode */
   if (!network_namespace.empty()) {
     m_native_interface->restore_original_network_namespace();
   }
-  /* purecov: end */
   if (retval->has_error) {
     m_native_interface->mysql_close(mysql_connection);
   }

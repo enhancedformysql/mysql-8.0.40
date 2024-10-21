@@ -189,7 +189,7 @@ class Replication_thread_api {
       @retval 0      OK
       @retval != 0   Error on queue
   */
-  int queue_packet(const char *buf, ulong event_len);
+  int queue_packet(const char *buf, ulong event_len, bool io_buffered);
 
   /**
     Checks if the applier, and its workers when parallel applier is

@@ -39,7 +39,6 @@
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_notification.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_proxy.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_state_exchange.h"
-#include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_statistics_interface.h"
 
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/network/include/network_management_interface.h"
 
@@ -220,7 +219,7 @@ class Gcs_xcom_communication : public Gcs_xcom_communication_interface {
   */
 
   explicit Gcs_xcom_communication(
-      Gcs_xcom_statistics_updater *stats, Gcs_xcom_proxy *proxy,
+      Gcs_xcom_proxy *proxy,
       Gcs_xcom_view_change_control_interface *view_control,
       Gcs_xcom_engine *gcs_engine, Gcs_group_identifier const &group_id,
       std::unique_ptr<Network_provider_management_interface> comms_mgmt);
@@ -256,10 +255,6 @@ class Gcs_xcom_communication : public Gcs_xcom_communication_interface {
   enum_gcs_error do_send_message(const Gcs_message &message_to_send,
                                  unsigned long long *message_length,
                                  Cargo_type cargo) override;
-
-  // For unit testing purposes
-  std::map<int, const Gcs_communication_event_listener &>
-      *get_event_listeners();
 
   Gcs_message_pipeline &get_msg_pipeline() override { return m_msg_pipeline; }
 
@@ -302,9 +297,6 @@ class Gcs_xcom_communication : public Gcs_xcom_communication_interface {
  private:
   // Registered event listeners
   std::map<int, const Gcs_communication_event_listener &> event_listeners;
-
-  // Reference to the stats updater interface
-  Gcs_xcom_statistics_updater *stats;
 
   // Reference to the xcom proxy interface
   Gcs_xcom_proxy *m_xcom_proxy;

@@ -7,7 +7,6 @@
 #
 # [--let $rpl_debug= 1]
 # [--let $rpl_group_replication= 1]
-# [--let $rpl_group_replication_single_primary_mode= 1]
 # [--let $rpl_group_replication_reset_persistent_vars= 1]
 # --source include/group_replication_end.inc
 #
@@ -20,10 +19,6 @@
 #
 #   $rpl_group_replication
 #     See include/rpl_end.inc
-#
-#   $rpl_group_replication_single_primary_mode
-#     This instructs this script to run the script that
-#     resets the single primary mode configs
 #
 #   $rpl_group_replication_reset_persistent_vars
 #     This instructs the script to use RESET PERSIST for
@@ -45,13 +40,6 @@ if ($install_clean_up_required)
 # Clean Group Replication XCom options on all servers to avoid false
 # errors on MTR check testcase.
 --source include/gr_clear_configuration.inc
-
-# if running in single primary mode, reset to saved configs
-if ($rpl_group_replication_single_primary_mode)
-{
-  --let $reset_single_primary_mode= 1
-  --source include/gr_single_primary_mode.inc
-}
 
 if ($rpl_group_replication_reset_persistent_vars)
 {

@@ -1,3 +1,0 @@
---let $transaction_T2_consistency= BEFORE
---let $transaction_T2_error= ER_GRP_TRX_CONSISTENCY_BEFORE
---source ../include/gr_consistent_reads_primary_failover.inc

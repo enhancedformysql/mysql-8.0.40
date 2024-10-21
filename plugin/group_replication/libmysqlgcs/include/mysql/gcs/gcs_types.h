@@ -77,25 +77,6 @@ class Gcs_interface_parameters {
   const std::string *get_parameter(const std::string &name) const;
 
   /**
-    Check whether any of the parameters were provided.
-
-    @param params list of parameters.
-    @return True if any of the parameters is stored.
-  */
-
-  bool check_parameters(const std::vector<std::string> &params) const;
-
-  /**
-    Check whether any of the parameters were provided.
-
-    @param params list of parameters.
-    @param size number of parameters.
-    @return True if any of the parameters is stored.
-  */
-
-  bool check_parameters(const char *params[], int size) const;
-
-  /**
    Adds the parameters provided to the existing set of parameters.
    @param p Parameters to add.
   */
@@ -130,10 +111,10 @@ enum class Gcs_protocol_version : unsigned short {
   UNKNOWN = 0,
   V1 = 1,
   V2 = 2,
-  V3 = 3,
   /* Define the highest known version. */
-  HIGHEST_KNOWN = V3,
+  HIGHEST_KNOWN = V2,
   /* Currently used in test cases. */
+  V3 = 3,
   V4 = 4,
   V5 = 5,
   /*

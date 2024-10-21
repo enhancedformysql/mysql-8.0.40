@@ -327,8 +327,8 @@ class Initialize_notification : public Parameterized_notification<false> {
   Initialize_notification &operator=(Initialize_notification const &);
 };
 
-typedef void(xcom_receive_data_functor)(synode_no, synode_no, Gcs_xcom_nodes *,
-                                        synode_no, u_int, char *);
+typedef void(xcom_receive_data_functor)(synode_no, Gcs_xcom_nodes *, synode_no,
+                                        u_int, char *);
 /**
   Notification used to inform that data has been totally ordered.
 */
@@ -340,7 +340,6 @@ class Data_notification : public Parameterized_notification<false> {
     @param functor Pointer to a function that contains that actual
                     core of the execution.
     @param message_id Messaged Id.
-    @param origin XCom synod of origin.
     @param xcom_nodes Set of nodes that participated in the consensus
                   to deliver the message.
     @param size Size of the message's content.
@@ -350,9 +349,8 @@ class Data_notification : public Parameterized_notification<false> {
   */
 
   explicit Data_notification(xcom_receive_data_functor *functor,
-                             synode_no message_id, synode_no origin,
-                             Gcs_xcom_nodes *xcom_nodes, synode_no last_removed,
-                             u_int size, char *data);
+                             synode_no message_id, Gcs_xcom_nodes *xcom_nodes,
+                             synode_no last_removed, u_int size, char *data);
 
   /**
     Destructor for Data_notification
@@ -378,11 +376,6 @@ class Data_notification : public Parameterized_notification<false> {
     Messaged Id.
   */
   synode_no m_message_id;
-
-  /*
-    XCom synode of origin.
-  */
-  synode_no m_origin;
 
   /*
     Set of nodes that participated in the consensus to deliver the

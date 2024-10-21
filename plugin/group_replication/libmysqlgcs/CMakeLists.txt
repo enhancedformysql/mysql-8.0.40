@@ -69,7 +69,6 @@ SET(XCOM_SOURCES
   src/bindings/xcom/xcom/xcom_cfg.cc
   src/bindings/xcom/xcom/xcom_cache.cc
   src/bindings/xcom/xcom/xcom_transport.cc
-  src/bindings/xcom/xcom/node_address.cc
   src/bindings/xcom/xcom/xcom_msg_queue.cc
   src/bindings/xcom/xcom/xcom_statistics.cc
   src/bindings/xcom/xcom/app_data.cc
@@ -94,7 +93,6 @@ SET(XCOM_SOURCES
   src/bindings/xcom/xcom/network/xcom_network_provider.cc
   src/bindings/xcom/xcom/network/xcom_network_provider_native_lib.cc
   src/bindings/xcom/xcom/network/xcom_network_provider_ssl_native_lib.cc
-  src/bindings/xcom/xcom/leader_info_data.cc
   ${XCOM_SUNRPC_SOURCES}
   ${XCOM_RPCGEN_SOURCES})
 
@@ -135,7 +133,6 @@ SET(GCS_SOURCES
   src/bindings/xcom/gcs_xcom_interface.cc
   src/bindings/xcom/gcs_xcom_notification.cc
   src/bindings/xcom/gcs_message_stage_lz4.cc
-  src/bindings/xcom/gcs_xcom_statistics_interface.cc
   src/bindings/xcom/gcs_xcom_proxy.cc
   src/bindings/xcom/gcs_xcom_communication_protocol_changer.cc
   ${BUNDLED_LZ4_PATH}/xxhash.c # required by gcs_message_stage_split

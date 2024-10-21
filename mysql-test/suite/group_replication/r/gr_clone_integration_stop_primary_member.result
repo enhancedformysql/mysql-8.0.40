@@ -25,8 +25,6 @@ include/start_group_replication.inc
 #######################################################################
 # 4. Restart server 2 with a monitoring process (mysqld_safe) if needed
 [connection server2]
-SET PERSIST group_replication_enforce_update_everywhere_checks= OFF;
-SET PERSIST group_replication_single_primary_mode= ON;
 include/spawn_monitoring_process.inc
 ############################################################
 # 5. Install the clone plugin on server 2
@@ -74,8 +72,6 @@ include/diff_tables.inc [server1:test.t1, server2:test.t1, server3:test.t1]
 [connection server2]
 SET DEBUG_SYNC = 'RESET';
 SET GLOBAL group_replication_clone_threshold= 9223372036854775807;
-RESET PERSIST IF EXISTS group_replication_enforce_update_everywhere_checks;
-RESET PERSIST IF EXISTS group_replication_single_primary_mode;
 RESET PERSIST IF EXISTS group_replication_group_name;
 RESET PERSIST IF EXISTS group_replication_local_address;
 RESET PERSIST IF EXISTS group_replication_group_seeds;

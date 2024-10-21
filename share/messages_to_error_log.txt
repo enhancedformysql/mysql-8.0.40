@@ -4512,8 +4512,8 @@ ER_GRP_RPL_CANT_READ_WRITE_SET_ITEM
 ER_GRP_RPL_INIT_CERTIFICATION_INFO_FAILURE
   eng "Error during certification_info initialization."
 
-ER_GRP_RPL_CONFLICT_DETECTION_DISABLED
-  eng "Primary had applied all relay logs, disabled conflict detection."
+ER_GRP_RPL_RETAINED
+  eng "Error retained by group replication."
 
 ER_GRP_RPL_MSG_DISCARDED
   eng "Message received while the plugin is not ready, message discarded."
@@ -4737,10 +4737,10 @@ ER_GRP_RPL_ADD_GTID_INFO_WITHOUT_REMOTE_GTID_FAILED
 ER_GRP_RPL_FETCH_VIEW_CHANGE_LOG_EVENT_FAILED
   eng "Failed to fetch View_change_log_event containing required info for certification"
 
-OBSOLETE_ER_GRP_RPL_CONTACT_WITH_SRV_FAILED
+ER_GRP_RPL_CONTACT_WITH_SRV_FAILED
   eng "Error when contacting the server to ensure the proper logging of a group change in the binlog"
 
-OBSOLETE_ER_GRP_RPL_SRV_WAIT_TIME_OUT
+ER_GRP_RPL_SRV_WAIT_TIME_OUT
   eng "Timeout when waiting for the server to execute local transactions in order assure the group change proper logging"
 
 ER_GRP_RPL_FETCH_LOG_EVENT_FAILED
@@ -4902,8 +4902,8 @@ ER_GRP_RPL_MSG_TOO_LONG_BROADCASTING_TRANS_FAILED
 ER_GRP_RPL_BROADCASTING_TRANS_TO_GRP_FAILED
   eng "Error while broadcasting the transaction to the group on session %u"
 
-ER_GRP_RPL_ERROR_WHILE_WAITING_FOR_CONFLICT_DETECTION
-  eng "Error while waiting for conflict detection procedure to finish on session %u"
+ER_GRP_RPL_ERROR_WHILE_WAITING_FOR_PAXOS_COMMUNICATION
+  eng "Error while waiting for Paxos communication to finish on session %u"
 
 OBSOLETE_ER_GRP_RPL_REINIT_OF_INTERNAL_CACHE_FOR_WRITE_FAILED
   eng "Error while re-initializing an internal cache, for write operations, on session %u"
@@ -4987,7 +4987,7 @@ ER_GRP_RPL_MEMBER_SERVER_UUID_IS_INCOMPATIBLE_WITH_GRP
   eng "Member server_uuid is incompatible with the group. Server_uuid %s matches group_replication_group_name %s."
 
 ER_GRP_RPL_MEMBER_CONF_INFO
-  eng "Member configuration: member_id: %lu; member_uuid: \"%s\"; single-primary mode: \"%s\"; group_replication_auto_increment_increment: %lu; group_replication_view_change_uuid: \"%s\";"
+  eng "Member configuration: member_id: %lu; member_uuid: \"%s\"; group_replication_auto_increment_increment: %lu; group_replication_view_change_uuid: \"%s\";"
 
 ER_GRP_RPL_FAILED_TO_CONFIRM_IF_SERVER_LEFT_GRP
   eng "Unable to confirm whether the server has left the group or not. Check performance_schema.replication_group_members to check group membership information."
@@ -10270,10 +10270,10 @@ ER_SERVER_BINLOG_UNSAFE_SYSTEM_FUNCTION
 ER_SERVER_UPGRADE_HELP_TABLE_STATUS
   eng "Upgrade of help tables %s."
 
-OBSOLETE_ER_GRP_RPL_SRV_GTID_WAIT_ERROR
+ER_GRP_RPL_SRV_GTID_WAIT_ERROR
   eng "Error when waiting for the server to execute local transactions in order assure the group change proper logging"
 
-OBSOLETE_ER_GRP_DELAYED_VCLE_LOGGING
+ER_GRP_DELAYED_VCLE_LOGGING
   eng "Unable to log the group change View log event in its exaction position in the log. This will not however affect the group replication recovery process or the overall plugin process."
 
 OBSOLETE_ER_CANNOT_GRANT_ROLES_TO_ANONYMOUS_USER
@@ -11537,20 +11537,20 @@ ER_HEALTH_WARNING_MEMORY_USAGE_LEVEL_2
 ER_HEALTH_WARNING_MEMORY_USAGE_LEVEL_3
   eng "%s: Warning Level 3 (%llu MiB): available=%llu MiB, total=%llu MiB, used=%.2f%%, mysqld=%llu MiB"
 
-ER_GRP_RPL_SET_SINGLE_CONSENSUS_LEADER
-  eng "The member %s:%u, with UUID: %s, was set as the single preferred consensus leader."
+ER_GRP_RPL_RESERVED_INFO_1
+  eng "%s"
 
-ER_GRP_RPL_ERROR_SET_SINGLE_CONSENSUS_LEADER
-  eng "Something went wrong trying to set the member %s:%u, with UUID: %s, as the single preferred consensus leader. Please query the performance_schema.replication_group_communication_information table to see whether the operation took effect, i.e. whether the preferred consensus leader matches the current primary. If not, consider electing a different primary to try again. Please check the error log and GCS_DEBUG_TRACE for more information that may help understanding what went wrong."
+ER_GRP_RPL_RESERVED_INFO_2
+  eng "%s"
 
-ER_GRP_RPL_SET_MULTI_CONSENSUS_LEADER
-  eng "All members were set as consensus leaders."
+ER_GRP_RPL_RESERVED_INFO_3
+  eng "%s"
 
-ER_GRP_RPL_ERROR_SET_MULTI_CONSENSUS_LEADER
-  eng "Something went wrong trying to set all members as consensus leaders. Please query the performance_schema.replication_group_communication_information table to see whether the operation took effect, i.e. whether the consensus leaders match all members. If not, consider resetting the group communication protocol to a version < 8.0.22, or switch to single-primary mode and back again to multi-primary mode, to try again. Please check the error log and GCS_DEBUG_TRACE for more information that may help understanding what went wrong."
+ER_GRP_RPL_RESERVED_INFO_4
+  eng "%s"
 
-ER_GRP_RPL_PAXOS_SINGLE_LEADER_DIFF_FROM_GRP
-  eng "This member is configured with a group_replication_paxos_single_leader option value of '%d' that is different from the group's value ('%d'). This member will now exit the group."
+ER_GRP_RPL_RESERVED_INFO_5
+  eng "%s"
 
 ER_MFA_USER_ATTRIBUTES_CORRUPT
   eng "Invalid and/or corrupted multi factor authentication methods in User_attributes column in mysql.user table. \"%s\"."
@@ -12317,6 +12317,18 @@ ER_IB_MSG_FIL_STATE_MOVED_PREV_OR_HAS_DATADIR
 #
 # End of 8.0 error messages intended to be written to the server error log.
 #
+
+ER_GRP_RPL_PRIMARY_ELECTION_MODE_NOT_COMPATIBLE
+  eng "The member is configured with a primary_election_mode option value '%s' not compatible from the group '%s'. The member will now exit the group."
+
+ER_RPL_FIND_LWM_WARNING_LOG
+  eng "The internal value might be inconsistent, start_index:%lu, entry:%lu, avail:%lu"
+
+ER_RPL_MOVE_QUEUE_HEAD_WARNING_LOG
+  eng "The values in move_queue_head could be inconsistent, total:%u, rli_checkpoint_seqno:%u, cnt:%lu"
+
+ER_RPL_GENERAL_INFO
+  eng "%s"
 
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for

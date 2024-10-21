@@ -28,15 +28,14 @@
 #endif
 
 #include "xcom/task_debug.h"
-#include "xcom/xcom_memory.h"
 #include "xcom/xcom_profile.h"
 #include "xdr_gen/xcom_vp.h"
 
 bit_set *new_bit_set(uint32_t bits) {
-  bit_set *bs = (bit_set *)xcom_malloc(sizeof(*bs));
+  bit_set *bs = (bit_set *)malloc(sizeof(*bs));
   bs->bits.bits_len = howmany_words(bits, MASK_BITS);
   bs->bits.bits_val =
-      (bit_mask *)xcom_malloc(bs->bits.bits_len * sizeof(*bs->bits.bits_val));
+      (bit_mask *)malloc(bs->bits.bits_len * sizeof(*bs->bits.bits_val));
   BIT_ZERO(bs);
   return bs;
 }
@@ -44,10 +43,10 @@ bit_set *new_bit_set(uint32_t bits) {
 bit_set *clone_bit_set(bit_set *orig) {
   if (!orig) return orig;
   {
-    bit_set *bs = (bit_set *)xcom_malloc(sizeof(*bs));
+    bit_set *bs = (bit_set *)malloc(sizeof(*bs));
     bs->bits.bits_len = orig->bits.bits_len;
     bs->bits.bits_val =
-        (bit_mask *)xcom_malloc(bs->bits.bits_len * sizeof(*bs->bits.bits_val));
+        (bit_mask *)malloc(bs->bits.bits_len * sizeof(*bs->bits.bits_val));
     memcpy(bs->bits.bits_val, orig->bits.bits_val,
            bs->bits.bits_len * sizeof(*bs->bits.bits_val));
     return bs;
@@ -58,50 +57,6 @@ void free_bit_set(bit_set *bs) {
   free(bs->bits.bits_val);
   free(bs);
 }
-
-#ifdef XCOM_STANDALONE
-/* purecov: begin deadcode */
-
-void bit_set_or(bit_set *x, bit_set const *y) {
-  unsigned int i = 0;
-  assert(x->bits.bits_len == y->bits.bits_len);
-  for (i = 0; i < x->bits.bits_len; i++) {
-    x->bits.bits_val[i] |= y->bits.bits_val[i];
-  }
-}
-#endif
-
-#if 0
-void bit_set_and(bit_set *x, bit_set const *y)
-{
-  unsigned int i = 0;
-  assert(x->bits.bits_len == y->bits.bits_len);
-  for(i = 0; i < x->bits.bits_len ; i++){
-    x->bits.bits_val[i] &= y->bits.bits_val[i];
-  }
-}
-#endif
-
-#if 0
-void bit_set_xor(bit_set *x, bit_set const *y)
-{
-  unsigned int i = 0;
-  assert(x->bits.bits_len == y->bits.bits_len);
-  for(i = 0; i < x->bits.bits_len ; i++){
-    x->bits.bits_val[i] ^= y->bits.bits_val[i];
-  }
-}
-#endif
-
-#if 0
-void bit_set_not(bit_set *x)
-{
-  unsigned int i = 0;
-  for(i = 0; i < x->bits.bits_len ; i++){
-    x->bits.bits_val[i] = ~x->bits.bits_val[i];
-  }
-}
-#endif
 
 /* Debug a bit set */
 char *dbg_bitset(bit_set const *p, u_int nodes) {
@@ -119,4 +74,3 @@ char *dbg_bitset(bit_set const *p, u_int nodes) {
   RET_GOUT;
 }
 
-/* purecov: end */

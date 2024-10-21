@@ -139,26 +139,6 @@ uint64_t Gcs_message_data::get_encode_header_size() const {
          + WIRE_PAYLOAD_LEN_SIZE; /* payload length */
 }
 
-/* purecov: begin deadcode */
-bool Gcs_message_data::append_to_header(const uchar *to_append,
-                                        uint32_t to_append_len) {
-  if (m_header_capacity < to_append_len) {
-    MYSQL_GCS_LOG_ERROR("Header reserved capacity is "
-                        << m_header_capacity
-                        << " but it "
-                           "has been requested to add data whose size is "
-                        << to_append_len);
-    return true;
-  }
-
-  memcpy(m_header_slider, to_append, to_append_len);
-  m_header_slider += to_append_len;
-  m_header_len += to_append_len;
-
-  return false;
-}
-/* purecov: end */
-
 bool Gcs_message_data::append_to_payload(const uchar *to_append,
                                          uint64_t to_append_len) {
   if (m_payload_capacity < to_append_len) {
@@ -176,9 +156,6 @@ bool Gcs_message_data::append_to_payload(const uchar *to_append,
 
   return false;
 }
-
-/* purecov: begin deadcode */
-void Gcs_message_data::release_ownership() { m_owner = false; }
 
 bool Gcs_message_data::encode(uchar **buffer, uint64_t *buffer_len) const {
   uint32_t header_len = get_header_length();
@@ -344,12 +321,6 @@ Gcs_message::~Gcs_message() {
 const Gcs_member_identifier &Gcs_message::get_origin() const {
   return *m_origin;
 }
-
-/* purecov: begin deadcode */
-const Gcs_group_identifier *Gcs_message::get_destination() const {
-  return m_destination;
-}
-/* purecov: end */
 
 Gcs_message_data &Gcs_message::get_message_data() const { return *m_data; }
 

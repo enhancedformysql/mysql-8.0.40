@@ -52,12 +52,11 @@ pax_msg *clone_pax_msg_no_app(pax_msg *msg);
 pax_msg *clone_pax_msg(pax_msg *msg);
 ballot *init_ballot(ballot *bal, int cnt, node_no node);
 pax_msg *pax_msg_new(synode_no synode, site_def const *site);
+pax_msg *pax_faked_msg_new(synode_no synode, node_no nodeno);
 pax_msg *pax_msg_new_0(synode_no synode);
 void dbg_ballot(ballot const *p, char *s);
 void add_ballot_event(ballot const bal);
-char *dbg_pax_msg(pax_msg const *p);
 void delete_pax_msg(pax_msg *p);
-/* void replace_pax_msg(pax_msg **target, pax_msg *p); */
 void unchecked_replace_pax_msg(pax_msg **target, pax_msg *p);
 
 #define replace_pax_msg(target, p)        \
@@ -67,3 +66,4 @@ void unchecked_replace_pax_msg(pax_msg **target, pax_msg *p);
   }
 
 #endif
+

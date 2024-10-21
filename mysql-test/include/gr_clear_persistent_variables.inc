@@ -2,8 +2,6 @@
 #
 # Clear variables that were persisted with SET PERSIST[_ONLY]
 # For now it only resets single primary variables
-#  - group_replication_single_primary_mode
-#  - group_replication_enforce_update_everywhere_checks
 #
 # ==== Usage ====
 #
@@ -40,8 +38,6 @@ while ($_rpl_server <= $_rpl_server_max)
     --disable_query_log
     # variables might not be there for some connections
     --disable_warnings
-    RESET PERSIST IF EXISTS group_replication_single_primary_mode;
-    RESET PERSIST IF EXISTS group_replication_enforce_update_everywhere_checks;
     --enable_warnings
     --enable_query_log
 
