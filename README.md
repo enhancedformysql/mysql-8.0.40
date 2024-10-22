@@ -36,9 +36,7 @@ To align with the official MySQL 8.0 version, the following strategy has been ad
 
 1. Closely monitor later versions of MySQL 8.0 to minimize issues and simplify maintenance.
 2. Release new versions within a month after the official release to ensure alignment with the official schedule.
-3. Focus on enhancing performance, stability, high availability, and consistent reads.
-
- 
+3. Focus on enhancing performance, stability, high availability, and consistent reads. 
 
 ## Our Improvements
 
@@ -87,10 +85,10 @@ The compiled version utilizing PGO optimization is recommended. Users interested
    [Download Here](https://github.com/advancedmysql/mysql-8.0.40)  
    
    - **Release for CentOS 8.0**  
-     [Download Here](https://github.com/advancedmysql/mysql-8.0.40)  
+     [Download Here](https://github.com/advancedmysql/mysql-8.0.40/releases/download/mysql-8.0.40-v1.0/mysql-8.0.40-v1-for-centos8.tar.gz)  
    
    - **Release for CentOS 7.0**  
-     [Download Here](https://github.com/advancedmysql/mysql-8.0.40)  
+     [Download Here](https://github.com/advancedmysql/mysql-8.0.40/releases/download/mysql-8.0.40-v1.0/mysql-8.0.40-v1-for-centos7.tar.gz)  
 
 ## Frequently Asked Questions
 
@@ -108,9 +106,9 @@ To date, MySQL 8.0 has been in development and use for over eight years, demonst
 
 **3. Why do users report a performance decline in 8.0?**
 
-Many users claim that the performance of 8.0 has declined, but this is a misconception, often based on single-node sysbench test results. Users should test our open-source version in real-world environments or use better tools like BenchmarkSQL TPCC to evaluate the optimized performance, ideally testing in a clustered environment.
+Many users claim that the performance of 8.0 has declined, but this is a misconception, often based on simple sysbench test results. Users should test our open-source version in real-world environments or use better tools like BenchmarkSQL TPCC to evaluate the optimized performance, ideally testing in a clustered environment.
 
-The feedback on performance decline mostly comes from tests on low-end machines. The reason for the decline in these environments is that the official version uses a new redo log mechanism, which indeed has higher latency compared to the previous one. However, this new mechanism greatly improves concurrent write capabilities, allowing 8.0 to outperform version 5.7 significantly in high-concurrency scenarios.
+The feedback on performance decline mostly comes from tests on low-end machines. The reason for the performance decline in these environments is that the official version uses a new redo log mechanism, which employs a batch activation approach. This mechanism is more efficient in high-concurrency scenarios, but compared to the previous user thread self-activation mechanism, it offers no advantage in low-concurrency situations. Overall, in cases with low contention, i.e., low concurrency, the response speed has decreased, but overall efficiency has improved. However, this new mechanism greatly improves concurrent write capabilities, allowing 8.0 to outperform version 5.7 significantly in high-concurrency scenarios.
 
 We have optimized for low-concurrency environments, achieving notable improvements in some cases, though these improvements are only significant in specific scenarios.
 
