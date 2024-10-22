@@ -10,7 +10,7 @@ Extensive testing has shown that these optimizations are especially effective on
 - **Performance Optimization for Binlog Group Commits.**
 - **Resolution of Performance Degradation Issues in Query Execution Plans.**
 - **Replica Replay Optimization:** Accelerated replay speed on replicas to ensure consistent reads.
-- **Throttling Mechanisms:** Enhanced performance under extreme concurrency.
+- 
 - **Addressing Performance Issues Due to Poor MySQL NUMA Compatibility.**
 - **Mature High Availability Product:** Improved Paxos protocol and protocol interactions, along with better design and enhanced cluster write performance.
 
