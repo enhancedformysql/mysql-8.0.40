@@ -30,10 +30,10 @@ The compiled version utilizing PGO optimization is recommended. Users interested
 
 ## Download Available Releases
 
-**Release for CentOS 8.0**  
+**The binary release version for CentOS 8.0**
 [Download Here](https://github.com/advancedmysql/mysql-8.0.40/releases/download/mysql-8.0.40-v1.0/mysql-8.0.40-v1-for-centos8.tar.gz)  
 
-**Release for CentOS 7.0**  
+**The binary release version for CentOS 7.0**  
 [Download Here](https://github.com/advancedmysql/mysql-8.0.40/releases/download/mysql-8.0.40-v1.0/mysql-8.0.40-v1-for-centos7.tar.gz)  
 
 ## References
