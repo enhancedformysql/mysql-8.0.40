@@ -295,12 +295,6 @@ class Multisource_info {
       }
     }
 
-#ifndef NDEBUG
-    if (Source_IO_monitor::get_instance()->is_monitoring_process_running()) {
-      assert(count > 0);
-    }
-#endif
-
     return count;
   }
 
