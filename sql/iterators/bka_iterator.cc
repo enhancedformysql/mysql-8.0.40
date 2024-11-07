@@ -83,8 +83,7 @@ BKAIterator::BKAIterator(THD *thd,
       m_mem_root(key_memory_hash_join, 16384 /* 16 kB */),
       m_rows(&m_mem_root),
       m_outer_input_tables(outer_input_tables, store_rowids,
-                           tables_to_get_rowid_for,
-                           /*tables_to_store_contents_of_null_rows_for=*/0),
+                           tables_to_get_rowid_for),
       m_max_memory_available(max_memory_available),
       m_mrr_bytes_needed_for_single_inner_row(
           mrr_bytes_needed_for_single_inner_row),
@@ -328,8 +327,7 @@ MultiRangeRowIterator::MultiRangeRowIterator(
       m_ref(ref),
       m_mrr_flags(mrr_flags),
       m_outer_input_tables(outer_input_tables, store_rowids,
-                           tables_to_get_rowid_for,
-                           /*tables_to_store_contents_of_null_rows_for=*/0),
+                           tables_to_get_rowid_for),
       m_join_type(join_type) {}
 
 bool MultiRangeRowIterator::Init() {

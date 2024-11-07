@@ -251,29 +251,6 @@ Mem_root_array<TABLE *> CollectTables(THD *thd, AccessPath *root_path) {
   return tables;
 }
 
-/**
-  Get the tables that are accessed by EQ_REF and can be on the inner side of an
-  outer join. These need some extra care in AggregateIterator when handling
-  NULL-complemented rows, so that the cache in EQRefIterator is not disturbed by
-  AggregateIterator's switching between groups.
- */
-static table_map GetNullableEqRefTables(const AccessPath *root_path) {
-  table_map tables = 0;
-  WalkAccessPaths(
-      root_path, /*join=*/nullptr,
-      WalkAccessPathPolicy::STOP_AT_MATERIALIZATION,
-      [&tables](const AccessPath *path, const JOIN *) {
-        if (path->type == AccessPath::EQ_REF) {
-          const auto &param = path->eq_ref();
-          if (param.table->is_nullable() && !param.ref->disable_cache) {
-            tables |= param.table->pos_in_table_list->map();
-          }
-        }
-        return false;
-      });
-  return tables;
-}
-
 // Mirrors QEP_TAB::pfs_batch_update(), with one addition:
 // If there is more than one table, batch mode will be handled by the join
 // iterators on the probe side, so joins will return false.
@@ -877,8 +854,7 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
         iterator = NewIterator<AggregateIterator>(
             thd, mem_root, std::move(job.children[0]), join,
             TableCollection(tables, /*store_rowids=*/false,
-                            /*tables_to_get_rowid_for=*/0,
-                            GetNullableEqRefTables(param.child)),
+                            /*tables_to_get_rowid_for=*/0),
             param.rollup);
         break;
       }

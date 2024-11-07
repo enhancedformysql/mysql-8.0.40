@@ -1127,136 +1127,204 @@ inline void rec_init_offsets_comp_ordinary(const rec_t *rec, bool temp,
   ulint any_ext = 0;
   ulint null_mask = 1;
   uint16_t i = 0;
-  do {
-    /* Fields are stored on disk in version they are added in and are
-    maintained in fields_array in the same order. Get the right field. */
-    const dict_field_t *field = index->get_physical_field(i);
-    const dict_col_t *col = field->col;
-    uint64_t len;
 
-    switch (rec_insert_state) {
-      case INSERTED_INTO_TABLE_WITH_NO_INSTANT_NO_VERSION:
-        ut_ad(!index->has_instant_cols_or_row_versions());
-        break;
+  if  (rec_insert_state == INSERTED_INTO_TABLE_WITH_NO_INSTANT_NO_VERSION) {
+    do {
+      /* Fields are stored on disk in version they are added in and are
+         maintained in fields_array in the same order. Get the right field. */
+      const dict_field_t *field = index->get_physical_field(i);
+      const dict_col_t *col = field->col;
+      uint64_t len;
 
-      case INSERTED_BEFORE_INSTANT_ADD_NEW_IMPLEMENTATION: {
-        ut_ad(row_version == UINT8_UNDEFINED || row_version == 0);
-        ut_ad(index->has_row_versions() || temp);
-        /* Record has to be interpreted in v0. */
-        row_version = 0;
+      if (!(col->prtype & DATA_NOT_NULL)) {
+        /* nullable field => read the null flag */
+        ut_ad(n_null--);
+
+        if (UNIV_UNLIKELY(!(byte)null_mask)) {
+          nulls--;
+          null_mask = 1;
+        }
+
+        if (*nulls & null_mask) {
+          null_mask <<= 1;
+          /* No length is stored for NULL fields.
+             We do not advance offs, and we set
+             the length to zero and enable the
+             SQL NULL flag in offsets[]. */
+          len = offs | REC_OFFS_SQL_NULL;
+          goto resolved1;
+        }
+        null_mask <<= 1;
       }
+
+      if (!field->fixed_len || (temp && !col->get_fixed_size(temp))) {
+        ut_ad(col->mtype != DATA_POINT);
+        /* Variable-length field: read the length */
+        len = *lens--;
+        /* If the maximum length of the field is up
+           to 255 bytes, the actual length is always
+           stored in one byte. If the maximum length is
+           more than 255 bytes, the actual length is
+           stored in one byte for 0..127.  The length
+           will be encoded in two bytes when it is 128 or
+           more, or when the field is stored externally. */
+        if (DATA_BIG_COL(col)) {
+          if (len & 0x80) {
+            /* 1exxxxxxx xxxxxxxx */
+            len <<= 8;
+            len |= *lens--;
+
+            offs += len & 0x3fff;
+            if (UNIV_UNLIKELY(len & 0x4000)) {
+              ut_ad(index->is_clustered());
+              any_ext = REC_OFFS_EXTERNAL;
+              len = offs | REC_OFFS_EXTERNAL;
+            } else {
+              len = offs;
+            }
+
+            goto resolved1;
+          }
+        }
+
+        len = offs += len;
+      } else {
+        len = offs += field->fixed_len;
+      }
+resolved1:
+      rec_offs_base(offsets)[i + 1] = len;
+    } while (++i < rec_offs_n_fields(offsets));
+
+  } else {
+
+    do {
+      /* Fields are stored on disk in version they are added in and are
+         maintained in fields_array in the same order. Get the right field. */
+      const dict_field_t *field = index->get_physical_field(i);
+      const dict_col_t *col = field->col;
+      uint64_t len;
+
+      switch (rec_insert_state) {
+        case INSERTED_INTO_TABLE_WITH_NO_INSTANT_NO_VERSION:
+          ut_ad(!index->has_instant_cols_or_row_versions());
+          break;
+        case INSERTED_BEFORE_INSTANT_ADD_NEW_IMPLEMENTATION:  {
+          ut_ad(row_version == UINT8_UNDEFINED || row_version == 0);
+          ut_ad(index->has_row_versions() || temp);
+          /* Record has to be interpreted in v0. */
+          row_version = 0;
+        }
         [[fallthrough]];
-      case INSERTED_AFTER_UPGRADE_BEFORE_INSTANT_ADD_NEW_IMPLEMENTATION:
-      case INSERTED_AFTER_INSTANT_ADD_NEW_IMPLEMENTATION: {
-        ut_ad(is_valid_row_version(row_version));
-        /* A record may have version=0 if it's from upgrade table */
-        ut_ad(index->has_row_versions() ||
+        case INSERTED_AFTER_UPGRADE_BEFORE_INSTANT_ADD_NEW_IMPLEMENTATION:
+        case INSERTED_AFTER_INSTANT_ADD_NEW_IMPLEMENTATION: {
+           ut_ad(is_valid_row_version(row_version));
+           /* A record may have version=0 if it's from upgrade table */
+           ut_ad(index->has_row_versions() ||
               (index->table->is_upgraded_instant() && row_version == 0));
 
-        /* Based on the record version and column information, see if this
-        column is there in this record or not. */
-        if (col->is_dropped_in_or_before(row_version)) {
+           /* Based on the record version and column information, see if this
+              column is there in this record or not. */
+          if (col->is_dropped_in_or_before(row_version)) {
           /* This columns is dropped before or on this row version so its data
-          won't be there on row. So no need to store the length. Instead, store
-          offs ORed with REC_OFFS_DROP to indicate the same. */
-          len = offs | REC_OFFS_DROP;
-          goto resolved;
+             won't be there on row. So no need to store the length. Instead, store
+             offs ORed with REC_OFFS_DROP to indicate the same. */
+             len = offs | REC_OFFS_DROP;
+             goto resolved2;
 
-          /* NOTE : Existing rows, which have data for this column, would still
-          need to process this column, so don't skip and store the correct
-          length there. Though it will be skipped while fetching row. */
-        } else if (col->is_added_after(row_version)) {
-          /* This columns is added after this row version. In this case no need
-          to store the length. Instead store only if it is NULL or DEFAULT
-          value. */
-          len = rec_get_instant_offset(index, i, offs);
+             /* NOTE : Existing rows, which have data for this column, would still
+                need to process this column, so don't skip and store the correct
+                length there. Though it will be skipped while fetching row. */
+          } else if (col->is_added_after(row_version)) {
+             /* This columns is added after this row version. In this case no need
+                to store the length. Instead store only if it is NULL or DEFAULT
+                value. */
+             len = rec_get_instant_offset(index, i, offs);
 
-          goto resolved;
-        }
-      } break;
+             goto resolved2;
+          }
+        } break;
 
-      case INSERTED_BEFORE_INSTANT_ADD_OLD_IMPLEMENTATION:
-      case INSERTED_AFTER_INSTANT_ADD_OLD_IMPLEMENTATION: {
-        ut_ad(non_default_fields > 0);
-        ut_ad(index->has_instant_cols());
-        ut_ad(!is_valid_row_version(row_version));
-
-        if (i >= non_default_fields) {
+        case INSERTED_BEFORE_INSTANT_ADD_OLD_IMPLEMENTATION:
+        case INSERTED_AFTER_INSTANT_ADD_OLD_IMPLEMENTATION: {
+          ut_ad(non_default_fields > 0);
+          ut_ad(index->has_instant_cols());
+          ut_ad(!is_valid_row_version(row_version));
+          if (i >= non_default_fields) {
           /* This would be the case when column doesn't exists in the row. In
-          this case we need not to store the length. Instead we store only if
-          the column is NULL or DEFAULT value. */
-          len = rec_get_instant_offset(index, i, offs);
-
-          goto resolved;
-        }
-
-        /* Note : Even if the column has been dropped, this row in V1 would
-        definitely have the value of this column. */
-      } break;
-
-      default:
-        ut_ad(false);
-    }
-
-    if (!(col->prtype & DATA_NOT_NULL)) {
-      /* nullable field => read the null flag */
-      ut_ad(n_null--);
-
-      if (UNIV_UNLIKELY(!(byte)null_mask)) {
-        nulls--;
-        null_mask = 1;
-      }
-
-      if (*nulls & null_mask) {
-        null_mask <<= 1;
-        /* No length is stored for NULL fields.
-        We do not advance offs, and we set
-        the length to zero and enable the
-        SQL NULL flag in offsets[]. */
-        len = offs | REC_OFFS_SQL_NULL;
-        goto resolved;
-      }
-      null_mask <<= 1;
-    }
-
-    if (!field->fixed_len || (temp && !col->get_fixed_size(temp))) {
-      ut_ad(col->mtype != DATA_POINT);
-      /* Variable-length field: read the length */
-      len = *lens--;
-      /* If the maximum length of the field is up
-      to 255 bytes, the actual length is always
-      stored in one byte. If the maximum length is
-      more than 255 bytes, the actual length is
-      stored in one byte for 0..127.  The length
-      will be encoded in two bytes when it is 128 or
-      more, or when the field is stored externally. */
-      if (DATA_BIG_COL(col)) {
-        if (len & 0x80) {
-          /* 1exxxxxxx xxxxxxxx */
-          len <<= 8;
-          len |= *lens--;
-
-          offs += len & 0x3fff;
-          if (UNIV_UNLIKELY(len & 0x4000)) {
-            ut_ad(index->is_clustered());
-            any_ext = REC_OFFS_EXTERNAL;
-            len = offs | REC_OFFS_EXTERNAL;
-          } else {
-            len = offs;
+             this case we need not to store the length. Instead we store only if
+             the column is NULL or DEFAULT value. */
+             len = rec_get_instant_offset(index, i, offs);
+             goto resolved2;
           }
 
-          goto resolved;
+          /* Note : Even if the column has been dropped, this row in V1 would
+             definitely have the value of this column. */
         }
+        break;
+        default:
+          ut_ad(false);
       }
 
-      len = offs += len;
-    } else {
-      len = offs += field->fixed_len;
-    }
-  resolved:
-    rec_offs_base(offsets)[i + 1] = len;
-  } while (++i < rec_offs_n_fields(offsets));
+      if (!(col->prtype & DATA_NOT_NULL)) {
+        /* nullable field => read the null flag */
+        ut_ad(n_null--);
 
+        if (UNIV_UNLIKELY(!(byte)null_mask)) {
+          nulls--;
+          null_mask = 1;
+        }
+
+        if (*nulls & null_mask) {
+          null_mask <<= 1;
+          /* No length is stored for NULL fields.
+             We do not advance offs, and we set
+             the length to zero and enable the
+             SQL NULL flag in offsets[]. */
+          len = offs | REC_OFFS_SQL_NULL;
+          goto resolved2;
+        }
+        null_mask <<= 1;
+      }
+
+      if (!field->fixed_len || (temp && !col->get_fixed_size(temp))) {
+        ut_ad(col->mtype != DATA_POINT);
+        /* Variable-length field: read the length */
+        len = *lens--;
+        /* If the maximum length of the field is up
+           to 255 bytes, the actual length is always
+           stored in one byte. If the maximum length is
+           more than 255 bytes, the actual length is
+           stored in one byte for 0..127.  The length
+           will be encoded in two bytes when it is 128 or
+           more, or when the field is stored externally. */
+        if (DATA_BIG_COL(col)) {
+          if (len & 0x80) {
+            /* 1exxxxxxx xxxxxxxx */
+            len <<= 8;
+            len |= *lens--;
+
+            offs += len & 0x3fff;
+            if (UNIV_UNLIKELY(len & 0x4000)) {
+              ut_ad(index->is_clustered());
+              any_ext = REC_OFFS_EXTERNAL;
+              len = offs | REC_OFFS_EXTERNAL;
+            } else {
+              len = offs;
+            }
+
+            goto resolved2;
+          }
+        }
+
+        len = offs += len;
+      } else {
+        len = offs += field->fixed_len;
+      }
+resolved2:
+      rec_offs_base(offsets)[i + 1] = len;
+    } while (++i < rec_offs_n_fields(offsets));
+
+  }
   *rec_offs_base(offsets) = (rec - (lens + 1)) | REC_OFFS_COMPACT | any_ext;
 }
 

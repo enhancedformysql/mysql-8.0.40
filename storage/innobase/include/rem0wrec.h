@@ -139,7 +139,7 @@ ulint rec_get_nth_field_offs_old(const dict_index_t *index, const rec_t *rec,
 @param[in]      offsets array returned by rec_get_offsets()
 @param[in]      n       nth field
 @param[in]      L       Line number of calling satement*/
-void validate_rec_offset(const dict_index_t *index, const ulint *offsets,
+bool validate_rec_offset(const dict_index_t *index, const ulint *offsets,
                          ulint n, ut::Location L);
 
 /** Returns nonzero if the extern bit is set in nth field of rec.
@@ -153,7 +153,7 @@ void validate_rec_offset(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_ad(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   /* Returns nonzero if the extern bit is set in nth field of rec. */
   return rec_offs_base(offsets)[1 + n] & REC_OFFS_EXTERNAL;
 }

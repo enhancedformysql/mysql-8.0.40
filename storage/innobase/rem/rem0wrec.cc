@@ -61,7 +61,7 @@ static void dump_metadata_dict_table(const dict_table_t *table) {
 }
 #endif /* !UNIV_NO_ERR_MSGS */
 
-void validate_rec_offset(const dict_index_t *index, const ulint *offsets,
+bool validate_rec_offset(const dict_index_t *index, const ulint *offsets,
                          ulint n, ut::Location L) {
   ut_ad(rec_offs_validate(nullptr, nullptr, offsets));
   if (n >= rec_offs_n_fields(offsets)) {
@@ -70,7 +70,9 @@ void validate_rec_offset(const dict_index_t *index, const ulint *offsets,
     auto num_fields = static_cast<size_t>(rec_offs_n_fields(offsets));
     ib::fatal(L, ER_IB_DICT_INVALID_COLUMN_POSITION, ulonglong{n}, num_fields);
 #endif /* !UNIV_NO_ERR_MSGS */
+    return false;
   }
+  return true;
 }
 
 const byte *rec_get_nth_field_old(const dict_index_t *index, const rec_t *rec,
@@ -127,7 +129,7 @@ ulint rec_offs_nth_sql_null(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_ad(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   return (rec_offs_nth_sql_null_low(offsets, n));
 }
 
@@ -137,7 +139,7 @@ ulint rec_offs_nth_default(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_ad(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   return (rec_offs_nth_default_low(offsets, n));
 }
 
@@ -147,7 +149,7 @@ ulint rec_offs_nth_size(const dict_index_t *index, const ulint *offsets,
     n = index->get_field_off_pos(n);
   }
 
-  validate_rec_offset(index, offsets, n, UT_LOCATION_HERE);
+  ut_ad(validate_rec_offset(index, offsets, n, UT_LOCATION_HERE));
   return (rec_offs_nth_size_low(offsets, n));
 }
 
