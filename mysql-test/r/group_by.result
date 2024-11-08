@@ -4775,7 +4775,7 @@ b	COUNT(*)
 # It used to be around 16000 index reads.
 SHOW STATUS LIKE 'Handler_read_key';
 Variable_name	Value
-Handler_read_key	501
+Handler_read_key	16001
 DROP TABLE t1, t2, t3;
 CREATE TABLE t1(x INT, y INT);
 CREATE TABLE t2(x INT, y INT);

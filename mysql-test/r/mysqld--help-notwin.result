@@ -432,8 +432,7 @@ The following options may be given as the first argument:
  GROUP_CONCAT()
  --group-replication-consistency[=name] 
  Transaction consistency guarantee, possible values:
- EVENTUAL, BEFORE_ON_PRIMARY_FAILOVER, BEFORE, AFTER,
- BEFORE_AND_AFTER
+ EVENTUAL, BEFORE_ON_PRIMARY_FAILOVER, BEFORE
  --gtid-executed-compression-period[=#] 
  Compress the mysql.gtid_executed table whenever this
  number of transactions have been added, by waking up a
@@ -1184,11 +1183,6 @@ The following options may be given as the first argument:
  binlog_transaction_dependency_tracking.
  --replica-parallel-workers=# 
  Number of worker threads for executing events in parallel
- --replica-pending-jobs-size-max=# 
- Soft limit on the size, in bytes, of per-worker queues of
- events that have not yet been applied. The queue size may
- exceed this limit in case a single event is bigger than
- the limit.
  --replica-preserve-commit-order 
  Force replication worker threads to commit in the same
  order as on the source. Enabled by default
@@ -1222,6 +1216,8 @@ The following options may be given as the first argument:
  If the variable is assigned the empty set, no conversions
  are allowed and it is expected that the types match
  exactly.
+ --replica-worker-queue-len-max=# 
+ Max length of one MTS Worker queue 
  --replicate-do-db=name 
  Make replication applier threads apply only changes to
  the specified database. To specify more than one
@@ -1443,9 +1439,6 @@ The following options may be given as the first argument:
  --slave-parallel-workers=# 
  This option is deprecated. Use replica_parallel_workers
  instead.
- --slave-pending-jobs-size-max=# 
- This option is deprecated. Use
- replica_pending_jobs_size_max instead.
  --slave-preserve-commit-order 
  This option is deprecated. Use
  replica_preserve_commit_order instead.
@@ -1961,20 +1954,20 @@ relay-log-purge TRUE
 relay-log-recovery FALSE
 relay-log-space-limit 0
 replica-allow-batching TRUE
-replica-checkpoint-group 512
-replica-checkpoint-period 300
+replica-checkpoint-group 8192
+replica-checkpoint-period 100
 replica-compressed-protocol FALSE
 replica-exec-mode STRICT
 replica-max-allowed-packet 1073741824
 replica-net-timeout 60
 replica-parallel-type LOGICAL_CLOCK
 replica-parallel-workers 4
-replica-pending-jobs-size-max 134217728
 replica-preserve-commit-order TRUE
 replica-skip-errors (No default value)
 replica-sql-verify-checksum TRUE
 replica-transaction-retries 10
 replica-type-conversions 
+replica-worker-queue-len-max 65536
 replicate-same-server-id FALSE
 replication-optimize-for-static-plugin-config FALSE
 replication-sender-observe-commit-only FALSE
@@ -2012,15 +2005,14 @@ skip-replica-start FALSE
 skip-show-database FALSE
 skip-slave-start FALSE
 slave-allow-batching TRUE
-slave-checkpoint-group 512
-slave-checkpoint-period 300
+slave-checkpoint-group 8192
+slave-checkpoint-period 100
 slave-compressed-protocol FALSE
 slave-exec-mode STRICT
 slave-max-allowed-packet 1073741824
 slave-net-timeout 60
 slave-parallel-type LOGICAL_CLOCK
 slave-parallel-workers 4
-slave-pending-jobs-size-max 134217728
 slave-preserve-commit-order TRUE
 slave-rows-search-algorithms INDEX_SCAN,HASH_SCAN
 slave-skip-errors (No default value)
