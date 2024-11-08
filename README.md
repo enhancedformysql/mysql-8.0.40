@@ -6,7 +6,7 @@ Extensive testing has shown that these optimizations are especially effective on
 
 ## Our Improvements
 
-- **Resolution of Performance Degradation Issues Since Version 8.0.28:** Join Performance Restored to Previous Levels.
+- **Resolution of Performance Degradation Issues Since Version 8.0.28:** Join performance restored to previous levels.
 - **InnoDB Storage Engine Enhancements:** Improved scalability and redo log performance in specific scenarios.
 - **Performance Optimization for Binlog Group Commits.**
 - **Resolution of Performance Degradation Issues in Query Execution Plans.**
