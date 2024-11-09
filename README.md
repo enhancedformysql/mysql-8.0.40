@@ -26,26 +26,26 @@ The compiled version utilizing PGO optimization is recommended. Users interested
 - It is recommended to align MySQL configuration parameters with our settings, making adjustments based on the specific hardware.
 - For high availability, we adopted the single-primary mode of Group Replication but removed the conflict detection part, making it a fully state machine-based approach.
 - Due to differences in the underlying data format of Paxos communication, it is incompatible with the official version during runtime, but compatible when offline. A restart of all nodes is required to complete the transition.
-- For the improved Group Replication, we also have a highly mature middleware to provide support. For more details, refer to the project at [MySQL Proxy](https://github.com/advancedmysql/mysql-proxy).
-- For more information, refer to the main project: [mysql](https://github.com/advancedmysql/mysql).
+- For the improved Group Replication, we also have a highly mature middleware to provide support. For more details, refer to the project at [Cetus](https://github.com/enhancedformysql/cetus).
+- For more information, refer to the main project: [enhancedformysql](https://github.com/advancedmysql/enhancedformysql).
 
 ## Download Available Releases
 
 **The binary release version of CentOS 8.0 for x86 architecture:**
 
-[Download Here](https://github.com/advancedmysql/mysql-8.0.40/releases/download/mysql-8.0.40-v2.0/mysql-8.0.40-v2-for-centos8.tar.gz)  
+[Download Here](https://github.com/enhancedformysql/mysql-8.0.40/releases/download/mysql-8.0.40-v2.0/mysql-8.0.40-v2-for-centos8.tar.gz)  
 
 **The binary release version of CentOS 7.0 for x86 architecture:**
 
-[Download Here](https://github.com/advancedmysql/mysql-8.0.40/releases/download/mysql-8.0.40-v2.0/mysql-8.0.40-v2-for-centos7.tar.gz)  
+[Download Here](https://github.com/enhancedformysql/mysql-8.0.40/releases/download/mysql-8.0.40-v2.0/mysql-8.0.40-v2-for-centos7.tar.gz)  
 
 ## References
 
-For detailed principles and mechanisms behind our improvements, please refer to the following book：[The Art of Problem-Solving in Software Engineering:How to Make MySQL Better](https://advancedmysql.github.io/The-Art-of-Problem-Solving-in-Software-Engineering_How-to-Make-MySQL-Better/)
+For detailed principles and mechanisms behind our improvements, please refer to the following book：[The Art of Problem-Solving in Software Engineering:How to Make MySQL Better](https://enhancedformysql.github.io/The-Art-of-Problem-Solving-in-Software-Engineering_How-to-Make-MySQL-Better/)
 
 ## Bugs and Feature Requests
 
-MySQL continues to offer numerous optimization opportunities of significant interest. If users experience any performance-related issues during actual use, [please open a new issue](https://github.com/advancedmysql/mysql-8.0.40/issues). Before submitting a new issue, please check for any existing ones.
+MySQL continues to offer numerous optimization opportunities of significant interest. If users experience any performance-related issues during actual use, [please open a new issue](https://github.com/enhancedformysql/mysql-8.0.40/issues). Before submitting a new issue, please check for any existing ones.
 
 ## Copyright and License
 
