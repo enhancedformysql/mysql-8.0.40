@@ -33,11 +33,11 @@ The compiled version utilizing PGO optimization is recommended. Users interested
 
 **The binary release version of CentOS 8.0 for x86 architecture:**
 
-[Download Here](https://github.com/enhancedformysql/mysql-8.0.40/releases/download/mysql-8.0.40-v2.0/mysql-8.0.40-v2-for-centos8.tar.gz)  
+[Download Here](https://github.com/enhancedformysql/mysql-8.0.40/releases/download/mysql-8.0.40-v3.0/mysql-8.0.40-v3-for-centos8.tar.gz)  
 
 **The binary release version of CentOS 7.0 for x86 architecture:**
 
-[Download Here](https://github.com/enhancedformysql/mysql-8.0.40/releases/download/mysql-8.0.40-v2.0/mysql-8.0.40-v2-for-centos7.tar.gz)  
+[Download Here](https://github.com/enhancedformysql/mysql-8.0.40/releases/download/mysql-8.0.40-v3.0/mysql-8.0.40-v3-for-centos7.tar.gz)  
 
 ## References
 
