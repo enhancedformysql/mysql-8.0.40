@@ -95,8 +95,6 @@ replica_parallel_type
 replica_parallel_type
 replica_parallel_workers
 replica_parallel_workers
-replica_pending_jobs_size_max
-replica_pending_jobs_size_max
 replica_preserve_commit_order
 replica_preserve_commit_order
 replica_skip_errors
@@ -105,6 +103,8 @@ replica_sql_verify_checksum
 replica_sql_verify_checksum
 replica_type_conversions
 replica_type_conversions
+replica_worker_queue_len_max
+replica_worker_queue_len_max
 replication_optimize_for_static_plugin_config
 replication_optimize_for_static_plugin_config
 replication_sender_observe_commit_only
@@ -144,8 +144,6 @@ slave_parallel_type
 slave_parallel_type
 slave_parallel_workers
 slave_parallel_workers
-slave_pending_jobs_size_max
-slave_pending_jobs_size_max
 slave_preserve_commit_order
 slave_preserve_commit_order
 slave_skip_errors
