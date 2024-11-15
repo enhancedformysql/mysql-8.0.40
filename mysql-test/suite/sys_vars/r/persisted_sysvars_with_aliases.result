@@ -733,25 +733,25 @@ include/assert.inc [slave_checkpoint_group should have value 1000 in the persist
 SET @@PERSIST.slave_checkpoint_group = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.persisted_variables]
-include/assert.inc [replica_checkpoint_group should have value 512 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.persisted_variables]
+include/assert.inc [replica_checkpoint_group should have value 8192 in the persist file]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.persisted_variables]
-include/assert.inc [slave_checkpoint_group should have value 512 in the persist file]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.persisted_variables]
+include/assert.inc [slave_checkpoint_group should have value 8192 in the persist file]
 # R1. RESET <old>
 RESET PERSIST slave_checkpoint_group;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should not exist in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should not exist in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should not exist in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should not exist in the persist file]
@@ -796,13 +796,13 @@ include/assert.inc [slave_checkpoint_group should not exist in the persist file]
 SET GLOBAL replica_checkpoint_group = DEFAULT;
 # R1. SET <new> when variable was previously unset
 SET @@PERSIST_ONLY.replica_checkpoint_group = 520;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should be 520 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should have value 520 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should be 520 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should have value 520 in the persist file]
@@ -810,13 +810,13 @@ include/assert.inc [slave_checkpoint_group should have value 520 in the persist 
 SET @@PERSIST_ONLY.slave_checkpoint_group = 1000;
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should be 1000 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should have value 1000 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should be 1000 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should have value 1000 in the persist file]
@@ -824,25 +824,25 @@ include/assert.inc [slave_checkpoint_group should have value 1000 in the persist
 SET @@PERSIST_ONLY.slave_checkpoint_group = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.persisted_variables]
-include/assert.inc [replica_checkpoint_group should have value 512 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.persisted_variables]
+include/assert.inc [replica_checkpoint_group should have value 8192 in the persist file]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.persisted_variables]
-include/assert.inc [slave_checkpoint_group should have value 512 in the persist file]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.persisted_variables]
+include/assert.inc [slave_checkpoint_group should have value 8192 in the persist file]
 # R1. RESET <old>
 RESET PERSIST slave_checkpoint_group;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should not exist in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should not exist in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should not exist in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should not exist in the persist file]
@@ -850,37 +850,37 @@ include/assert.inc [slave_checkpoint_group should not exist in the persist file]
 SET PERSIST_ONLY slave_checkpoint_group = 1000;
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should be 1000 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should have value 1000 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should be 1000 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should have value 1000 in the persist file]
 # R1. SET <new> when variable was previously set through <old>
 SET PERSIST_ONLY replica_checkpoint_group = 2000;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should be 2000 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should have value 2000 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should be 2000 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should have value 2000 in the persist file]
 # R1. RESET <new>
 RESET PERSIST replica_checkpoint_group;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_group should not exist in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_group should not exist in the persist file]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_group should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_group should not exist in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_group should not exist in the persist file]
@@ -927,25 +927,25 @@ include/assert.inc [slave_checkpoint_period should have value 2 in the persist f
 SET @@PERSIST.slave_checkpoint_period = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.persisted_variables]
-include/assert.inc [replica_checkpoint_period should have value 300 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.persisted_variables]
+include/assert.inc [replica_checkpoint_period should have value 100 in the persist file]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.persisted_variables]
-include/assert.inc [slave_checkpoint_period should have value 300 in the persist file]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.persisted_variables]
+include/assert.inc [slave_checkpoint_period should have value 100 in the persist file]
 # R1. RESET <old>
 RESET PERSIST slave_checkpoint_period;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should not exist in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should not exist in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should not exist in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should not exist in the persist file]
@@ -990,13 +990,13 @@ include/assert.inc [slave_checkpoint_period should not exist in the persist file
 SET GLOBAL replica_checkpoint_period = DEFAULT;
 # R1. SET <new> when variable was previously unset
 SET @@PERSIST_ONLY.replica_checkpoint_period = 1;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should be 1 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should have value 1 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should be 1 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should have value 1 in the persist file]
@@ -1004,13 +1004,13 @@ include/assert.inc [slave_checkpoint_period should have value 1 in the persist f
 SET @@PERSIST_ONLY.slave_checkpoint_period = 2;
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should be 2 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should have value 2 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should be 2 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should have value 2 in the persist file]
@@ -1018,25 +1018,25 @@ include/assert.inc [slave_checkpoint_period should have value 2 in the persist f
 SET @@PERSIST_ONLY.slave_checkpoint_period = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.persisted_variables]
-include/assert.inc [replica_checkpoint_period should have value 300 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.persisted_variables]
+include/assert.inc [replica_checkpoint_period should have value 100 in the persist file]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.persisted_variables]
-include/assert.inc [slave_checkpoint_period should have value 300 in the persist file]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.persisted_variables]
+include/assert.inc [slave_checkpoint_period should have value 100 in the persist file]
 # R1. RESET <old>
 RESET PERSIST slave_checkpoint_period;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should not exist in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should not exist in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should not exist in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should not exist in the persist file]
@@ -1044,37 +1044,37 @@ include/assert.inc [slave_checkpoint_period should not exist in the persist file
 SET PERSIST_ONLY slave_checkpoint_period = 2;
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should be 2 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should have value 2 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should be 2 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should have value 2 in the persist file]
 # R1. SET <new> when variable was previously set through <old>
 SET PERSIST_ONLY replica_checkpoint_period = 12323;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should be 12323 in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should have value 12323 in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should be 12323 in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should have value 12323 in the persist file]
 # R1. RESET <new>
 RESET PERSIST replica_checkpoint_period;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [replica_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [replica_checkpoint_period should not exist in P_S.persisted_variables]
 include/assert.inc [replica_checkpoint_period should not exist in the persist file]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 include/assert.inc [slave_checkpoint_period should have source DYNAMIC in P_S.variables_info]
 include/assert.inc [slave_checkpoint_period should not exist in P_S.persisted_variables]
 include/assert.inc [slave_checkpoint_period should not exist in the persist file]
@@ -2048,200 +2048,6 @@ include/assert.inc [slave_parallel_workers should not exist in P_S.persisted_var
 include/assert.inc [slave_parallel_workers should not exist in the persist file]
 SET GLOBAL replica_parallel_workers = DEFAULT;
 SET PERSIST_ONLY replica_parallel_workers = 100;
-sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
----- replica_pending_jobs_size_max ----
-# R1. SET <new> when variable was previously unset
-SET @@PERSIST.replica_pending_jobs_size_max = 65536;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 65536]
-include/assert.inc [replica_pending_jobs_size_max should be 65536 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 65536 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 65536 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 65536]
-include/assert.inc [slave_pending_jobs_size_max should be 65536 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 65536 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 65536 in the persist file]
-# R1. SET <old> when variable was previously set through <new>
-SET @@PERSIST.slave_pending_jobs_size_max = 32768;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 32768]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 32768 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 32768]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 32768 in the persist file]
-# R1. SET <old>  = DEFAULT
-SET @@PERSIST.slave_pending_jobs_size_max = DEFAULT;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 134217728 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 134217728 in the persist file]
-# R1. RESET <old>
-RESET PERSIST slave_pending_jobs_size_max;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
-# R1. SET <old> when variable was previously unset
-SET PERSIST slave_pending_jobs_size_max = 32768;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 32768]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 32768 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 32768]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 32768 in the persist file]
-# R1. SET <new> when variable was previously set through <old>
-SET PERSIST replica_pending_jobs_size_max = 4096;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 4096 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 4096 in the persist file]
-# R1. RESET <new>
-RESET PERSIST replica_pending_jobs_size_max;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
-SET GLOBAL replica_pending_jobs_size_max = DEFAULT;
-# R1. SET <new> when variable was previously unset
-SET @@PERSIST_ONLY.replica_pending_jobs_size_max = 65536;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 65536 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 65536 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 65536 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 65536 in the persist file]
-# R1. SET <old> when variable was previously set through <new>
-SET @@PERSIST_ONLY.slave_pending_jobs_size_max = 32768;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 32768 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 32768 in the persist file]
-# R1. SET <old>  = DEFAULT
-SET @@PERSIST_ONLY.slave_pending_jobs_size_max = DEFAULT;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 134217728 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 134217728 in the persist file]
-# R1. RESET <old>
-RESET PERSIST slave_pending_jobs_size_max;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
-# R1. SET <old> when variable was previously unset
-SET PERSIST_ONLY slave_pending_jobs_size_max = 32768;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 32768 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 32768 in the persist file]
-# R1. SET <new> when variable was previously set through <old>
-SET PERSIST_ONLY replica_pending_jobs_size_max = 4096;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 4096 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 4096 in the persist file]
-# R1. RESET <new>
-RESET PERSIST replica_pending_jobs_size_max;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source DYNAMIC in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
-SET GLOBAL replica_pending_jobs_size_max = DEFAULT;
-SET PERSIST_ONLY replica_pending_jobs_size_max = 4096;
 sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
@@ -4106,26 +3912,6 @@ include/assert.inc [slave_parallel_workers should have source PERSISTED in P_S.v
 include/assert.inc [slave_parallel_workers should be 100 in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should have value 100 in the persist file]
 sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 4096 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 4096 in the persist file]
-sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
 - invalid=[0.1, 2, -1, "''", "'x'", "'TRUE'", "'1'", "NULL"]
@@ -4501,26 +4287,6 @@ include/assert.inc [slave_parallel_workers should have source PERSISTED in P_S.v
 include/assert.inc [slave_parallel_workers should be 100 in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should not exist in the persist file]
 sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 4096 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
-sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
 - invalid=[0.1, 2, -1, "''", "'x'", "'TRUE'", "'1'", "NULL"]
@@ -4895,26 +4661,6 @@ include/assert.inc [slave_parallel_workers should have source PERSISTED in P_S.v
 include/assert.inc [slave_parallel_workers should be 100 in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should have value 100 in the persist file]
 sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 4096 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 4096 in the persist file]
-sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
 - invalid=[0.1, 2, -1, "''", "'x'", "'TRUE'", "'1'", "NULL"]
@@ -5112,7 +4858,6 @@ include/assert_error_log.inc [server: 1, pattern:
 .*The variable slave_max_allowed_packet has been renamed to replica_max_allowed_packet, and the old name deprecated.*
 .*The variable slave_net_timeout has been renamed to replica_net_timeout, and the old name deprecated.*
 .*The variable slave_parallel_workers has been renamed to replica_parallel_workers, and the old name deprecated.*
-.*The variable slave_pending_jobs_size_max has been renamed to replica_pending_jobs_size_max, and the old name deprecated.*
 .*The variable slave_preserve_commit_order has been renamed to replica_preserve_commit_order, and the old name deprecated.*
 .*The variable slave_skip_errors has been renamed to replica_skip_errors, and the old name deprecated.*
 .*The variable slave_sql_verify_checksum has been renamed to replica_sql_verify_checksum, and the old name deprecated.*
@@ -5312,26 +5057,6 @@ include/assert.inc [slave_parallel_workers should be 100 in P_S.global_variables
 include/assert.inc [slave_parallel_workers should have source PERSISTED in P_S.variables_info]
 include/assert.inc [slave_parallel_workers should be 100 in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should have value 100 in the persist file]
-sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 4096 in the persist file]
 sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
@@ -5707,26 +5432,6 @@ include/assert.inc [slave_parallel_workers should have source PERSISTED in P_S.v
 include/assert.inc [slave_parallel_workers should be 100 in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should have value 100 in the persist file]
 sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should have value 4096 in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source PERSISTED in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should have value 4096 in the persist file]
-sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
 - invalid=[0.1, 2, -1, "''", "'x'", "'TRUE'", "'1'", "NULL"]
@@ -5926,7 +5631,6 @@ include/assert_error_log.inc [server: 1, pattern:
 .*The syntax .slave_max_allowed_packet. is deprecated and will be removed in a future release. Please use replica_max_allowed_packet instead.
 .*The syntax .slave_net_timeout. is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
 .*The syntax .slave_parallel_workers. is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
-.*The syntax .slave_pending_jobs_size_max. is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
 .*The syntax .slave_preserve_commit_order. is deprecated and will be removed in a future release. Please use replica_preserve_commit_order instead.
 .*The syntax .slave_skip_errors. is deprecated and will be removed in a future release. Please use replica_skip_errors instead.
 .*The syntax .slave_sql_verify_checksum. is deprecated and will be removed in a future release. Please use replica_sql_verify_checksum instead.
@@ -6135,26 +5839,6 @@ include/assert.inc [slave_parallel_workers should be 100 in P_S.global_variables
 include/assert.inc [slave_parallel_workers should have source COMMAND_LINE in P_S.variables_info]
 include/assert.inc [slave_parallel_workers should not exist in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should not exist in the persist file]
-sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source COMMAND_LINE in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source COMMAND_LINE in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
 sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
@@ -6532,26 +6216,6 @@ include/assert.inc [slave_parallel_workers should have source COMMAND_LINE in P_
 include/assert.inc [slave_parallel_workers should not exist in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should not exist in the persist file]
 sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source COMMAND_LINE in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source COMMAND_LINE in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
-sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
 - invalid=[0.1, 2, -1, "''", "'x'", "'TRUE'", "'1'", "NULL"]
@@ -6741,7 +6405,6 @@ include/assert_error_log.inc [server: 1, pattern:
 .*The syntax .slave_max_allowed_packet. is deprecated and will be removed in a future release. Please use replica_max_allowed_packet instead.
 .*The syntax .slave_net_timeout. is deprecated and will be removed in a future release. Please use replica_net_timeout instead.
 .*The syntax .slave_parallel_workers. is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
-.*The syntax .slave_pending_jobs_size_max. is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
 .*The syntax .slave_preserve_commit_order. is deprecated and will be removed in a future release. Please use replica_preserve_commit_order instead.
 .*The syntax .slave_skip_errors. is deprecated and will be removed in a future release. Please use replica_skip_errors instead.
 .*The syntax .slave_sql_verify_checksum. is deprecated and will be removed in a future release. Please use replica_sql_verify_checksum instead.
@@ -6950,26 +6613,6 @@ include/assert.inc [slave_parallel_workers should be 100 in P_S.global_variables
 include/assert.inc [slave_parallel_workers should have source COMMAND_LINE in P_S.variables_info]
 include/assert.inc [slave_parallel_workers should not exist in P_S.persisted_variables]
 include/assert.inc [slave_parallel_workers should not exist in the persist file]
-sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [replica_pending_jobs_size_max should have source COMMAND_LINE in P_S.variables_info]
-include/assert.inc [replica_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [replica_pending_jobs_size_max should not exist in the persist file]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [slave_pending_jobs_size_max should have source COMMAND_LINE in P_S.variables_info]
-include/assert.inc [slave_pending_jobs_size_max should not exist in P_S.persisted_variables]
-include/assert.inc [slave_pending_jobs_size_max should not exist in the persist file]
 sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order

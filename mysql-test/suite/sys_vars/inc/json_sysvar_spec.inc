@@ -259,7 +259,7 @@ let $sysvar_specs =
   {
     "name": "replica_checkpoint_group",
     "alias": "slave_checkpoint_group",
-    "default": 512,
+    "default": 8192,
     "values": [520, 1000, 2000],
     "min": $if_debug_1_else_32,
     "max": 524280,
@@ -269,7 +269,7 @@ let $sysvar_specs =
   {
     "name": "replica_checkpoint_period",
     "alias": "slave_checkpoint_period",
-    "default": 300,
+    "default": 100,
     "values": [1, 2, 12323],
     "min": $if_debug_0_else_1,
     "max": $maxint32,
@@ -327,16 +327,6 @@ let $sysvar_specs =
     "default": 4,
     "values": [1, 2, 100],
     "max": 1024,
-    $int_invalid
-  },
-  {
-    "name": "replica_pending_jobs_size_max",
-    "alias": "slave_pending_jobs_size_max",
-    "default": 134217728,
-    "values": [65536, 32768, 4096],
-    "min": 1024,
-    "max": 18446744073709550592,
-    "block_size": 1024,
     $int_invalid
   },
   {

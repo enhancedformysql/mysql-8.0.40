@@ -945,14 +945,14 @@ sysvar:
 - min=1
 - max=524280
 - block_size=1
-- default=512
+- default=8192
 - values=[520, 1000, 2000]
 ==== Testing SET @@global.replica_checkpoint_group [allowed values, range, invalid values] ====
 # Initial value is default
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 # Valid values for variable
 SET @@global.replica_checkpoint_group=520;
 include/assert.inc [@@global.replica_checkpoint_group should be 520]
@@ -971,10 +971,10 @@ include/assert.inc [@@global.slave_checkpoint_group should be 2000]
 include/assert.inc [slave_checkpoint_group should be 2000 in P_S.global_variables]
 # Setting default value for variable
 SET @@global.replica_checkpoint_group = DEFAULT;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 # Minimum value
 SET @@global.replica_checkpoint_group = 1;
 include/assert.inc [@@global.replica_checkpoint_group should be 1]
@@ -1016,10 +1016,10 @@ SET @@global.replica_checkpoint_group = NULL;
 Got one of the listed errors
 # Restore default
 SET @@global.replica_checkpoint_group = DEFAULT;
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
 ==== Testing SET @@session.replica_checkpoint_group [invalid scope] ====
 SET @@session.replica_checkpoint_group = DEFAULT;
 ERROR HY000: Variable 'replica_checkpoint_group' is a GLOBAL variable and should be set with SET GLOBAL
@@ -1041,14 +1041,14 @@ SELECT @@session.replica_checkpoint_group;
 ERROR HY000: Variable 'replica_checkpoint_group' is a GLOBAL variable
 SELECT @@replica_checkpoint_group;
 @@replica_checkpoint_group
-512
+8192
 include/assert.inc [Variable replica_checkpoint_group should exist in performance_schema.session_variables]
 ==== Testing SET @@global.slave_checkpoint_group [allowed values, range, invalid values] ====
 # Initial value is default
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 # Valid values for variable
 SET @@global.slave_checkpoint_group=520;
 Warnings:
@@ -1075,10 +1075,10 @@ include/assert.inc [replica_checkpoint_group should be 2000 in P_S.global_variab
 SET @@global.slave_checkpoint_group = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 # Minimum value
 SET @@global.slave_checkpoint_group = 1;
 Warnings:
@@ -1128,10 +1128,10 @@ Got one of the listed errors
 SET @@global.slave_checkpoint_group = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
-include/assert.inc [@@global.slave_checkpoint_group should be 512]
-include/assert.inc [slave_checkpoint_group should be 512 in P_S.global_variables]
-include/assert.inc [@@global.replica_checkpoint_group should be 512]
-include/assert.inc [replica_checkpoint_group should be 512 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_group should be 8192]
+include/assert.inc [slave_checkpoint_group should be 8192 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_group should be 8192]
+include/assert.inc [replica_checkpoint_group should be 8192 in P_S.global_variables]
 ==== Testing SET @@session.slave_checkpoint_group [invalid scope] ====
 SET @@session.slave_checkpoint_group = DEFAULT;
 ERROR HY000: Variable 'slave_checkpoint_group' is a GLOBAL variable and should be set with SET GLOBAL
@@ -1153,7 +1153,7 @@ SELECT @@session.slave_checkpoint_group;
 ERROR HY000: Variable 'slave_checkpoint_group' is a GLOBAL variable
 SELECT @@slave_checkpoint_group;
 @@slave_checkpoint_group
-512
+8192
 Warnings:
 Warning	1287	'@@slave_checkpoint_group' is deprecated and will be removed in a future release. Please use replica_checkpoint_group instead.
 include/assert.inc [Variable slave_checkpoint_group should exist in performance_schema.session_variables]
@@ -1170,14 +1170,14 @@ sysvar:
 - min=0
 - max=4294967295
 - block_size=1
-- default=300
+- default=100
 - values=[1, 2, 12323]
 ==== Testing SET @@global.replica_checkpoint_period [allowed values, range, invalid values] ====
 # Initial value is default
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 # Valid values for variable
 SET @@global.replica_checkpoint_period=1;
 include/assert.inc [@@global.replica_checkpoint_period should be 1]
@@ -1196,10 +1196,10 @@ include/assert.inc [@@global.slave_checkpoint_period should be 12323]
 include/assert.inc [slave_checkpoint_period should be 12323 in P_S.global_variables]
 # Setting default value for variable
 SET @@global.replica_checkpoint_period = DEFAULT;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 # Minimum value
 SET @@global.replica_checkpoint_period = 0;
 include/assert.inc [@@global.replica_checkpoint_period should be 0]
@@ -1241,10 +1241,10 @@ SET @@global.replica_checkpoint_period = NULL;
 Got one of the listed errors
 # Restore default
 SET @@global.replica_checkpoint_period = DEFAULT;
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
 ==== Testing SET @@session.replica_checkpoint_period [invalid scope] ====
 SET @@session.replica_checkpoint_period = DEFAULT;
 ERROR HY000: Variable 'replica_checkpoint_period' is a GLOBAL variable and should be set with SET GLOBAL
@@ -1266,14 +1266,14 @@ SELECT @@session.replica_checkpoint_period;
 ERROR HY000: Variable 'replica_checkpoint_period' is a GLOBAL variable
 SELECT @@replica_checkpoint_period;
 @@replica_checkpoint_period
-300
+100
 include/assert.inc [Variable replica_checkpoint_period should exist in performance_schema.session_variables]
 ==== Testing SET @@global.slave_checkpoint_period [allowed values, range, invalid values] ====
 # Initial value is default
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 # Valid values for variable
 SET @@global.slave_checkpoint_period=1;
 Warnings:
@@ -1300,10 +1300,10 @@ include/assert.inc [replica_checkpoint_period should be 12323 in P_S.global_vari
 SET @@global.slave_checkpoint_period = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 # Minimum value
 SET @@global.slave_checkpoint_period = 0;
 Warnings:
@@ -1353,10 +1353,10 @@ Got one of the listed errors
 SET @@global.slave_checkpoint_period = DEFAULT;
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
-include/assert.inc [@@global.slave_checkpoint_period should be 300]
-include/assert.inc [slave_checkpoint_period should be 300 in P_S.global_variables]
-include/assert.inc [@@global.replica_checkpoint_period should be 300]
-include/assert.inc [replica_checkpoint_period should be 300 in P_S.global_variables]
+include/assert.inc [@@global.slave_checkpoint_period should be 100]
+include/assert.inc [slave_checkpoint_period should be 100 in P_S.global_variables]
+include/assert.inc [@@global.replica_checkpoint_period should be 100]
+include/assert.inc [replica_checkpoint_period should be 100 in P_S.global_variables]
 ==== Testing SET @@session.slave_checkpoint_period [invalid scope] ====
 SET @@session.slave_checkpoint_period = DEFAULT;
 ERROR HY000: Variable 'slave_checkpoint_period' is a GLOBAL variable and should be set with SET GLOBAL
@@ -1378,7 +1378,7 @@ SELECT @@session.slave_checkpoint_period;
 ERROR HY000: Variable 'slave_checkpoint_period' is a GLOBAL variable
 SELECT @@slave_checkpoint_period;
 @@slave_checkpoint_period
-300
+100
 Warnings:
 Warning	1287	'@@slave_checkpoint_period' is deprecated and will be removed in a future release. Please use replica_checkpoint_period instead.
 include/assert.inc [Variable slave_checkpoint_period should exist in performance_schema.session_variables]
@@ -2678,278 +2678,6 @@ SELECT @@slave_parallel_workers;
 Warnings:
 Warning	1287	'@@slave_parallel_workers' is deprecated and will be removed in a future release. Please use replica_parallel_workers instead.
 include/assert.inc [Variable slave_parallel_workers should exist in performance_schema.session_variables]
-sysvar:
-- name=replica_pending_jobs_size_max
-- alias=slave_pending_jobs_size_max
-- invalid=[1.5, "ON", "'x'", "NULL"]
-- global=1
-- session=0
-- cmdline=1
-- persist=1
-- persist_as_readonly=0
-- dynamic=1
-- min=1024
-- max=18446744073709550592
-- block_size=1024
-- default=134217728
-- values=[65536, 32768, 4096]
-==== Testing SET @@global.replica_pending_jobs_size_max [allowed values, range, invalid values] ====
-# Initial value is default
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-# Valid values for variable
-SET @@global.replica_pending_jobs_size_max=65536;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 65536]
-include/assert.inc [replica_pending_jobs_size_max should be 65536 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 65536]
-include/assert.inc [slave_pending_jobs_size_max should be 65536 in P_S.global_variables]
-SET @@global.replica_pending_jobs_size_max=32768;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 32768]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 32768]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.global_variables]
-SET @@global.replica_pending_jobs_size_max=4096;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-# Setting default value for variable
-SET @@global.replica_pending_jobs_size_max = DEFAULT;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-# Minimum value
-SET @@global.replica_pending_jobs_size_max = 1024;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 1024]
-include/assert.inc [replica_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 1024]
-include/assert.inc [slave_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [Expected min value should equal min value in performance_schema]
-# Less-than-minimum values
-SET @@global.replica_pending_jobs_size_max = 1023;
-Warnings:
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '1023'
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 1024]
-include/assert.inc [replica_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 1024]
-include/assert.inc [slave_pending_jobs_size_max should be 1024 in P_S.global_variables]
-SET @@global.replica_pending_jobs_size_max = 0;
-Warnings:
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '0'
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 1024]
-include/assert.inc [replica_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 1024]
-include/assert.inc [slave_pending_jobs_size_max should be 1024 in P_S.global_variables]
-# Maximum value
-SET @@global.replica_pending_jobs_size_max = 18446744073709550592;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [replica_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [slave_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [Expected max value should equal max value in performance_schema]
-# Greater-than-maximum values
-SET @@global.replica_pending_jobs_size_max = 18446744073709550593;
-Warnings:
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '18446744073709550593'
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [replica_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [slave_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-SET @@global.replica_pending_jobs_size_max = 18446744073709551615;
-Warnings:
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '18446744073709551615'
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [replica_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [slave_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-# Non-block-size value
-SET @@global.replica_pending_jobs_size_max = 134218751;
-Warnings:
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '134218751'
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-# Invalid values
-SET @@global.replica_pending_jobs_size_max = 1.5;
-Got one of the listed errors
-SET @@global.replica_pending_jobs_size_max = ON;
-Got one of the listed errors
-SET @@global.replica_pending_jobs_size_max = 'x';
-Got one of the listed errors
-SET @@global.replica_pending_jobs_size_max = NULL;
-Got one of the listed errors
-# Restore default
-SET @@global.replica_pending_jobs_size_max = DEFAULT;
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-==== Testing SET @@session.replica_pending_jobs_size_max [invalid scope] ====
-SET @@session.replica_pending_jobs_size_max = DEFAULT;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@replica_pending_jobs_size_max = DEFAULT;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@session.replica_pending_jobs_size_max = 65536;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@replica_pending_jobs_size_max = 65536;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@session.replica_pending_jobs_size_max = 32768;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@replica_pending_jobs_size_max = 32768;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@session.replica_pending_jobs_size_max = 4096;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@replica_pending_jobs_size_max = 4096;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SELECT @@session.replica_pending_jobs_size_max;
-ERROR HY000: Variable 'replica_pending_jobs_size_max' is a GLOBAL variable
-SELECT @@replica_pending_jobs_size_max;
-@@replica_pending_jobs_size_max
-134217728
-include/assert.inc [Variable replica_pending_jobs_size_max should exist in performance_schema.session_variables]
-==== Testing SET @@global.slave_pending_jobs_size_max [allowed values, range, invalid values] ====
-# Initial value is default
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-# Valid values for variable
-SET @@global.slave_pending_jobs_size_max=65536;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 65536]
-include/assert.inc [slave_pending_jobs_size_max should be 65536 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 65536]
-include/assert.inc [replica_pending_jobs_size_max should be 65536 in P_S.global_variables]
-SET @@global.slave_pending_jobs_size_max=32768;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 32768]
-include/assert.inc [slave_pending_jobs_size_max should be 32768 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 32768]
-include/assert.inc [replica_pending_jobs_size_max should be 32768 in P_S.global_variables]
-SET @@global.slave_pending_jobs_size_max=4096;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 4096]
-include/assert.inc [slave_pending_jobs_size_max should be 4096 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 4096]
-include/assert.inc [replica_pending_jobs_size_max should be 4096 in P_S.global_variables]
-# Setting default value for variable
-SET @@global.slave_pending_jobs_size_max = DEFAULT;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-# Minimum value
-SET @@global.slave_pending_jobs_size_max = 1024;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 1024]
-include/assert.inc [slave_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 1024]
-include/assert.inc [replica_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [Expected min value should equal min value in performance_schema]
-# Less-than-minimum values
-SET @@global.slave_pending_jobs_size_max = 1023;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '1023'
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 1024]
-include/assert.inc [slave_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 1024]
-include/assert.inc [replica_pending_jobs_size_max should be 1024 in P_S.global_variables]
-SET @@global.slave_pending_jobs_size_max = 0;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '0'
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 1024]
-include/assert.inc [slave_pending_jobs_size_max should be 1024 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 1024]
-include/assert.inc [replica_pending_jobs_size_max should be 1024 in P_S.global_variables]
-# Maximum value
-SET @@global.slave_pending_jobs_size_max = 18446744073709550592;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [slave_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [replica_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [Expected max value should equal max value in performance_schema]
-# Greater-than-maximum values
-SET @@global.slave_pending_jobs_size_max = 18446744073709550593;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '18446744073709550593'
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [slave_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [replica_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-SET @@global.slave_pending_jobs_size_max = 18446744073709551615;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '18446744073709551615'
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [slave_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 18446744073709550592]
-include/assert.inc [replica_pending_jobs_size_max should be 18446744073709550592 in P_S.global_variables]
-# Non-block-size value
-SET @@global.slave_pending_jobs_size_max = 134218751;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-Warning	1292	Truncated incorrect replica_pending_jobs_size_max value: '134218751'
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-# Invalid values
-SET @@global.slave_pending_jobs_size_max = 1.5;
-Got one of the listed errors
-SET @@global.slave_pending_jobs_size_max = ON;
-Got one of the listed errors
-SET @@global.slave_pending_jobs_size_max = 'x';
-Got one of the listed errors
-SET @@global.slave_pending_jobs_size_max = NULL;
-Got one of the listed errors
-# Restore default
-SET @@global.slave_pending_jobs_size_max = DEFAULT;
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [@@global.slave_pending_jobs_size_max should be 134217728]
-include/assert.inc [slave_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-include/assert.inc [@@global.replica_pending_jobs_size_max should be 134217728]
-include/assert.inc [replica_pending_jobs_size_max should be 134217728 in P_S.global_variables]
-==== Testing SET @@session.slave_pending_jobs_size_max [invalid scope] ====
-SET @@session.slave_pending_jobs_size_max = DEFAULT;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@slave_pending_jobs_size_max = DEFAULT;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@session.slave_pending_jobs_size_max = 65536;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@slave_pending_jobs_size_max = 65536;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@session.slave_pending_jobs_size_max = 32768;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@slave_pending_jobs_size_max = 32768;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@session.slave_pending_jobs_size_max = 4096;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SET @@slave_pending_jobs_size_max = 4096;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable and should be set with SET GLOBAL
-SELECT @@session.slave_pending_jobs_size_max;
-ERROR HY000: Variable 'slave_pending_jobs_size_max' is a GLOBAL variable
-SELECT @@slave_pending_jobs_size_max;
-@@slave_pending_jobs_size_max
-134217728
-Warnings:
-Warning	1287	'@@slave_pending_jobs_size_max' is deprecated and will be removed in a future release. Please use replica_pending_jobs_size_max instead.
-include/assert.inc [Variable slave_pending_jobs_size_max should exist in performance_schema.session_variables]
 sysvar:
 - name=replica_preserve_commit_order
 - alias=slave_preserve_commit_order
