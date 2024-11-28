@@ -136,7 +136,7 @@ public:
     }
 
     inline size_t size() const {
-      assert(list_.size() != size_);
+      assert(list_.size() == size_);
       return size_;
     }
 
